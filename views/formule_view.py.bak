@@ -1,0 +1,206 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime
+
+class FormuleView(ttk.Frame):
+    def __init__(self, parent, articles=None):
+        super().__init__(parent)
+        self.pack(fill=tk.BOTH, expand=True)
+        self.configure(padding=20)
+        self.articles = articles if articles else []
+        self.formules = []
+        self.composantes = []
+        self.code_counter = 1
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Formulaire
+        form_frame = ttk.LabelFrame(self, text="Nouvelle formule", padding=15)
+        form_frame.pack(fill=tk.X, padx=10, pady=10)
+        form_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(form_frame, text="Code :").grid(row=0, column=0, sticky="w", pady=5)
+        self.code_var = tk.StringVar()
+        self.code_var.set(self.generate_code())
+        self.code_entry = ttk.Entry(form_frame, textvariable=self.code_var, state="readonly")
+        self.code_entry.grid(row=0, column=1, sticky="ew", pady=5)
+
+        ttk.Label(form_frame, text="Optim :").grid(row=1, column=0, sticky="w", pady=5)
+        self.optim_entry = ttk.Entry(form_frame)
+        self.optim_entry.grid(row=1, column=1, sticky="ew", pady=5)
+
+        ttk.Label(form_frame, text="Désignation :").grid(row=2, column=0, sticky="w", pady=5)
+        self.designation_entry = ttk.Entry(form_frame)
+        self.designation_entry.grid(row=2, column=1, sticky="ew", pady=5)
+
+        ttk.Label(form_frame, text="Description :").grid(row=3, column=0, sticky="w", pady=5)
+        self.desc_entry = ttk.Entry(form_frame)
+        self.desc_entry.grid(row=3, column=1, sticky="ew", pady=5)
+
+        ttk.Label(form_frame, text="Date création :").grid(row=4, column=0, sticky="w", pady=5)
+        self.date_var = tk.StringVar()
+        self.date_var.set(datetime.now().strftime("%Y-%m-%d %H:%M"))
+        self.date_entry = ttk.Entry(form_frame, textvariable=self.date_var)
+        self.date_entry.grid(row=4, column=1, sticky="ew", pady=5)
+        self.date_mode = tk.BooleanVar(value=True)
+        self.date_check = ttk.Checkbutton(form_frame, text="Date automatique", variable=self.date_mode, command=self.toggle_date_mode)
+        self.date_check.grid(row=4, column=2, padx=5)
+
+        # Tableau des formules
+        table_frame = ttk.LabelFrame(self, text="Formules", padding=15)
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        columns = ("code", "optim", "designation", "description", "date", "nb_composantes", "detail")
+        self.formule_tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
+        for col, txt, w in zip(columns, ["Code", "Optim", "Désignation", "Description", "Date création", "Nb composantes", "Détail"], [80, 100, 180, 200, 140, 120, 80]):
+            self.formule_tree.heading(col, text=txt)
+            self.formule_tree.column(col, width=w, anchor="center")
+        self.formule_tree.pack(fill=tk.BOTH, expand=True)
+        self.formule_tree.bind("<Button-1>", self.on_detail_click)
+
+        # Boutons d'action
+        btns_frame = ttk.Frame(table_frame)
+        btns_frame.pack(fill=tk.X, pady=10)
+        ttk.Button(btns_frame, text="Ajouter", command=self.ajouter_formule).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btns_frame, text="Modifier", command=self.modifier_formule).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btns_frame, text="Copier", command=self.copier_formule).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btns_frame, text="Supprimer", command=self.supprimer_formule).pack(side=tk.LEFT, padx=10)
+
+        # Zone pour afficher le détail (tab composantes)
+        self.detail_notebook = ttk.Notebook(self)
+        self.detail_notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    def toggle_date_mode(self):
+        if self.date_mode.get():
+            self.date_var.set(datetime.now().strftime("%Y-%m-%d %H:%M"))
+            self.date_entry.config(state="normal")
+        else:
+            self.date_entry.config(state="normal")
+
+    def generate_code(self):
+        code = f"F{self.code_counter:03d}"
+        self.code_counter += 1
+        return code
+
+    def ajouter_formule(self):
+        code = self.code_var.get()
+        optim = self.optim_entry.get().strip()
+        designation = self.designation_entry.get().strip()
+        description = self.desc_entry.get().strip()
+        date = self.date_var.get().strip()
+        composantes = self.composantes.copy()
+        if not optim or not designation or not description:
+            messagebox.showwarning("Champs manquants", "Remplissez tous les champs.")
+            return
+        formule = {
+            "code": code,
+            "optim": optim,
+            "designation": designation,
+            "description": description,
+            "date": date,
+            "composantes": composantes
+        }
+        self.formules.append(formule)
+        self.refresh_table()
+        self.code_var.set(self.generate_code())
+        self.optim_entry.delete(0, tk.END)
+        self.designation_entry.delete(0, tk.END)
+        self.desc_entry.delete(0, tk.END)
+        self.composantes.clear()
+        self.refresh_detail_tab(None)
+
+    def refresh_table(self):
+        for i in self.formule_tree.get_children():
+            self.formule_tree.delete(i)
+        for f in self.formules:
+            self.formule_tree.insert("", "end", values=(
+                f["code"], f["optim"], f["designation"], f["description"], f["date"], len(f["composantes"]), "Détail"
+            ))
+
+    def modifier_formule(self):
+        selected = self.formule_tree.selection()
+        if not selected:
+            messagebox.showwarning("Sélection", "Sélectionnez une formule à modifier.")
+            return
+        item_id = selected[0]
+        values = self.formule_tree.item(item_id, "values")
+        code = values[0]
+        formule = next((f for f in self.formules if f["code"] == code), None)
+        if not formule:
+            messagebox.showerror("Erreur", "Formule introuvable.")
+            return
+        self.code_var.set(formule["code"])
+        self.optim_entry.delete(0, tk.END)
+        self.optim_entry.insert(0, formule["optim"])
+        self.designation_entry.delete(0, tk.END)
+        self.designation_entry.insert(0, formule["designation"])
+        self.desc_entry.delete(0, tk.END)
+        self.desc_entry.insert(0, formule["description"])
+        self.date_var.set(formule["date"])
+        self.composantes = formule["composantes"].copy()
+        self.refresh_detail_tab(None)
+
+    def copier_formule(self):
+        selected = self.formule_tree.selection()
+        if not selected:
+            messagebox.showwarning("Sélection", "Sélectionnez une formule à copier.")
+            return
+        item_id = selected[0]
+        values = self.formule_tree.item(item_id, "values")
+        code = values[0]
+        formule = next((f for f in self.formules if f["code"] == code), None)
+        if not formule:
+            messagebox.showerror("Erreur", "Formule introuvable.")
+            return
+        self.clipboard_clear()
+        self.clipboard_append(str(formule))
+        messagebox.showinfo("Copie", "Formule copiée dans le presse-papier.")
+
+    def supprimer_formule(self):
+        selected = self.formule_tree.selection()
+        if not selected:
+            messagebox.showwarning("Sélection", "Sélectionnez une formule à supprimer.")
+            return
+        item_id = selected[0]
+        values = self.formule_tree.item(item_id, "values")
+        code = values[0]
+        self.formule_tree.delete(item_id)
+        self.formules = [f for f in self.formules if f["code"] != code]
+        self.refresh_detail_tab(None)
+
+    def on_detail_click(self, event):
+        region = self.formule_tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+        col = self.formule_tree.identify_column(event.x)
+        if col != "#7":  # colonne "detail"
+            return
+        item_id = self.formule_tree.identify_row(event.y)
+        if not item_id:
+            return
+        values = self.formule_tree.item(item_id, "values")
+        code = values[0]
+        formule = next((f for f in self.formules if f["code"] == code), None)
+        if not formule:
+            return
+        self.refresh_detail_tab(formule)
+
+    def refresh_detail_tab(self, formule):
+        # Efface l'ancien tab
+        for tab_id in self.detail_notebook.tabs():
+            self.detail_notebook.forget(tab_id)
+        if not formule:
+            return
+        tab = ttk.Frame(self.detail_notebook)
+        self.detail_notebook.add(tab, text=f"Composantes {formule['code']}")
+        columns = ("article", "pourcentage", "unite")
+        tree = ttk.Treeview(tab, columns=columns, show="headings")
+        tree.heading("article", text="Article")
+        tree.heading("pourcentage", text="%")
+        tree.heading("unite", text="Unité")
+        tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        for comp in formule["composantes"]:
+            tree.insert("", "end", values=(comp.get("article", ""), comp.get("pourcentage", ""), comp.get("unite", "")))
+        ttk.Label(tab, text=f"Nombre de composantes : {len(formule['composantes'])}").pack(anchor="w", padx=10, pady=5)
+
+# Pour ajouter des composantes à la formule courante, il faudrait ajouter une interface dédiée dans le formulaire principal.
+# Cette version répond à toutes les demandes de structure et navigation.

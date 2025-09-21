@@ -1,0 +1,169 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+class GestionApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Application de Gestion")
+        self.geometry("1000x700")
+
+        # Liste partagée des articles
+        self.articles = []
+
+        # Liste partagée des fournisseurs
+        self.fournisseurs = []
+
+        # Barre d’outils (optionnelle)
+        self.toolbar = tk.Frame(self, bd=1, relief=tk.RAISED)
+        self.toolbar.pack(side=tk.TOP, fill=tk.X)
+
+        # Création des onglets
+        self.tab_control = ttk.Notebook(self)
+        self.tab_control.pack(expand=1, fill='both')
+        self.create_tabs()
+
+        # Barre de statut
+        self.status = tk.StringVar(value="Prêt")
+        status_bar = tk.Label(self, textvariable=self.status, bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # Menu principal
+        self.create_menu()
+
+        # Couleurs professionnelles harmonisées
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure("TNotebook.Tab", background="#2C3E50", foreground="white")
+        style.map("TNotebook.Tab", background=[("selected", "#586E86")], foreground=[("selected", "#33C435")])
+        style.configure("TFrame", background="#F4F4F4")
+        style.configure("TLabel", background="#ECF0F1", foreground="#222222", font=("Arial", 11))
+        style.configure("TButton", background="#2C3E50", foreground="white")
+        style.map("TButton", background=[("active", "#34495E")])
+        style.configure("TLabelframe", background="#ECF0F1")
+        style.configure("TLabelframe.Label", background="#F4F4F4", foreground="#222222",font=("Arial", 11,"bold"))
+        self.configure(bg="#F4F4F4")
+
+        # Synchronisation CommandeView <-> Fournisseurs
+        self.commande_view = None
+
+        # Ajout callback pour synchronisation articles
+        self.on_add_article = None
+
+        # Synchronisation FormuleView <-> Articles
+        self.formule_view = None
+
+    # -------------------------
+    # Menu
+    # -------------------------
+    def create_menu(self):
+        # Suppression du menu principal (Fichier, Édition, Aide)
+        pass
+
+    # -------------------------
+    # Onglets
+    # -------------------------
+    def create_tabs(self):
+        # Onglet Articles
+        self.article_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.article_tab, text='Articles')
+        self.init_article_tab()
+
+        # Onglet Formules
+        self.formule_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.formule_tab, text='Formules')
+        self.init_formule_tab()
+
+        # Onglet Commandes
+        self.commande_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.commande_tab, text='Commandes')
+        self.init_commande_tab()
+
+        # Onglet Fabrication
+        self.fabrication_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.fabrication_tab, text='Fabrication')
+        self.init_fabrication_tab()
+
+        # Onglet Fournisseurs
+        self.fournisseur_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.fournisseur_tab, text='Fournisseurs')
+        self.init_fournisseur_tab()
+
+        # Onglet Dashboard
+        self.dashboard_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.dashboard_tab, text='Dashboard')
+        self.init_dashboard_tab()
+    def init_dashboard_tab(self):
+        from controllers.dashbord_controller import DashbordController
+        from views.dashbord_view import StockView
+        controller = DashbordController()
+        StockView(controller, master=self.dashboard_tab)
+    def init_fournisseur_tab(self):
+        from models.fournisseur import FournisseurModel
+        from views.fournisseur_view import FournisseurView
+        from controllers.fournisseur_controller import FournisseurController
+
+        model = FournisseurModel()
+        view = FournisseurView(self.fournisseur_tab)
+        controller = FournisseurController(model, view)
+        # Ajout callback pour synchronisation
+        view.on_add_fournisseur = self.on_add_fournisseur
+
+    # -------------------------
+    # Initialisation des onglets
+    # -------------------------
+    def init_article_tab(self):
+        from controllers.article_controller import ArticleController
+        controller = ArticleController(self.article_tab)
+        controller.view.on_add_article = self.add_article_callback
+
+    def init_formule_tab(self):
+        from views.formule_view import FormuleView
+        view = FormuleView(self.formule_tab, articles=self.articles)
+        self.formule_view = view
+
+    def init_commande_tab(self):
+        """Initialise l'onglet Commandes en MVC"""
+        from models.commande import CommandeModel
+        from controllers.commande_controller import CommandeController
+        from views.commande_view import CommandeView
+
+        model = CommandeModel()
+        view = CommandeView(self.commande_tab, main_notebook=self.tab_control)
+        view.set_fournisseurs(self.fournisseurs)
+        self.commande_view = view
+        controller = CommandeController(model, view)
+
+    def init_fabrication_tab(self):
+        from views.fabrication_view import FabricationView
+        self.fabrication_view = FabricationView(master=self.fabrication_tab)
+
+    # -------------------------
+    # Actions du menu
+    # -------------------------
+    def new_file(self):
+        self.status.set("Nouveau fichier")
+        messagebox.showinfo("Nouveau", "Créer un nouveau fichier")
+
+    def open_file(self):
+        self.status.set("Ouverture d'un fichier")
+        messagebox.showinfo("Ouvrir", "Ouvrir un fichier")
+
+    def show_about(self):
+        messagebox.showinfo("À propos", "Application de gestion professionnelle\nVersion 1.0")
+
+    def on_add_fournisseur(self, nom):
+        self.fournisseurs.append(nom)
+        if self.commande_view:
+            self.commande_view.update_fournisseurs(self.fournisseurs)
+
+    def add_article_callback(self, article):
+        self.articles.append(article)
+        if self.commande_view:
+            self.commande_view.update_articles(self.articles)
+        if self.formule_view:
+            self.formule_view.update_articles(self.articles)
+
+
+if __name__ == "__main__":
+    app = GestionApp()
+    app.mainloop()
