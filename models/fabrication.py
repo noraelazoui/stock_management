@@ -14,6 +14,34 @@ class Fabrication:
         self.prix_formule = prix_formule
 
     @staticmethod
+    def get_by_code_optim_lot(code, optim, lot):
+        """
+        Recherche une fabrication par code, optim et lot (lot est requis).
+        """
+        print("\nDébut recherche fabrication avec lot ===")
+        print(f"Recherche fabrication avec code='{code}', optim='{optim}', lot='{lot}'")
+
+        # Essayer différents types pour optim et lot
+        doc = db.fabrications.find_one({"code": code, "optim": optim, "lot": lot})
+        print(f"\n docs  {doc} ")
+        if not doc and isinstance(optim, str):
+            try:
+                numeric_optim = int(optim)
+                doc = db.fabrications.find_one({"code": code, "optim": numeric_optim, "lot": lot})
+                print(f"Tentative avec optim numérique: {numeric_optim}")
+            except ValueError:
+                pass
+
+        if not doc and isinstance(optim, (int, float)):
+            doc = db.fabrications.find_one({"code": code, "optim": str(optim), "lot": lot})
+            print(f"Tentative avec optim string: {str(optim)}")
+
+        print(f"\nRésultat de la recherche: {doc}")
+        print("=== Fin recherche fabrication avec lot\n")
+
+        return doc
+
+    @staticmethod
     def creer_fabrication(code, optim, recette_code, nb_composantes, quantite_a_fabriquer=None, date_fabrication=None, lot="", prix_formule=""):
         fabrication_id = str(uuid.uuid4())
         details = []

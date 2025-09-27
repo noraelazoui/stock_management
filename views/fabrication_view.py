@@ -196,8 +196,35 @@ class FabricationView(tk.Frame):
         self.detail_window_open = False
         
         # Lier l'événement de double-clic sur le tableau
-        self.tree.bind('<Double-Button-1>', self.on_tree_double_click)
 
+
+        self.tree.bind('<Double-Button-1>', self.on_tree_double_click)
+        # Remplir le tableau avec les fabrications depuis MongoDB
+        self.populate_fabrications_table()
+
+    def populate_fabrications_table(self):
+        """
+        Remplit le tableau principal avec les fabrications depuis MongoDB.
+        """
+        try:
+            from models.database import db
+            fabrications = list(db.fabrications.find())
+            for fab in fabrications:
+                code = fab.get("code", "")
+                optim = fab.get("optim", "")
+                recette = fab.get("recette_code", "")
+                nb_composantes = fab.get("nb_composantes", "")
+                quantite_a_fabriquer = fab.get("quantite_a_fabriquer", "")
+                date_fabrication = fab.get("date_fabrication", "")
+                lot = fab.get("lot", "")
+                prix_formule = fab.get("prix_formule", "")
+                # La colonne Détail sert à ouvrir la vue détail
+                self.tree.insert('', 'end', values=(
+                    code, optim, recette, nb_composantes, quantite_a_fabriquer,
+                    date_fabrication, lot, prix_formule, "Détail"
+                ))
+        except Exception as e:
+            print(f"Erreur lors du remplissage du tableau des fabrications: {str(e)}")
     def on_tree_double_click(self, event):
         try:
             print("[DEBUG] Double-clic détecté sur le tableau.")
@@ -220,14 +247,15 @@ class FabricationView(tk.Frame):
                     values = self.tree.item(item)['values']
                     code = values[0]
                     optim = values[1]
-                    print(f"[DEBUG] Ouverture des détails pour code={code}, optim={optim}")
-                    self.afficher_details(code, optim)
+                    lot = values[6] if len(values) > 6 else None
+                    print(f"[DEBUG] Ouverture des détails pour code={code}, optim={optim}, lot={lot}")
+                    self.afficher_details(code, optim, lot)
         except Exception as e:
             print(f"Erreur lors du clic sur le tableau: {str(e)}")
             import traceback
             traceback.print_exc()
 
-    def afficher_details(self, code, optim):
+    def afficher_details(self, code, optim, lot=None):
         try:
             print(f"\n=== DÉBUT AFFICHAGE DÉTAILS ===")
             print(f"Affichage des détails pour code: '{code}', optim: '{optim}'")
@@ -262,6 +290,22 @@ class FabricationView(tk.Frame):
             self.detail_entries = {}
             
             # Chargement des articles de la formule
+            
+            try:
+                from models.database import db
+                fabrication = db.fabrications.find_one({
+                    "code": str(code),
+                    "optim": str(optim),
+                    "lot": str(lot)
+                })
+                print(f"[DEBUG] Fabrication chargée: {code}, {optim}, {lot} -> {fabrication}")
+               
+                # Chargement des articles depuis la formule (et non fabrication)
+            except Exception as e:
+                print(f"Erreur lors du chargement de la fabrication: {str(e)}")
+                import traceback
+                traceback.print_exc()
+            self.articles_disponibles = []
             from models.formule import Formule
             try:
                 # Récupérer la formule complète
@@ -284,6 +328,12 @@ class FabricationView(tk.Frame):
                 else:
                     print("Aucune formule ou composante trouvée")
                     self.articles_disponibles = []
+            except Exception as e:
+                print(f"Erreur lors du chargement des composantes: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                self.articles_disponibles = []
+
             except Exception as e:
                 print(f"Erreur lors du chargement des composantes: {str(e)}")
                 import traceback
@@ -378,6 +428,24 @@ class FabricationView(tk.Frame):
             table_frame.grid_rowconfigure(0, weight=1)
             table_frame.grid_columnconfigure(0, weight=1)
 
+            # Afficher les articles existants de detail-fabrication dans le tableau
+            if fabrication and "detail-fabrication" in fabrication:
+                details = fabrication["detail-fabrication"]
+                for detail in details:
+                    values = [
+                        detail.get("article", ""),
+                        detail.get("dem", ""),
+                        detail.get("prix", ""),
+                        detail.get("quantite_stock", ""),
+                        detail.get("pourcentage", ""),
+                        detail.get("optim", ""),
+                        detail.get("recette_code", ""),
+                        detail.get("quantite_fabrique", ""),
+                        detail.get("prix_total", ""),
+                        detail.get("lot", "")
+                    ]
+                    detail_tree.insert('', 'end', values=values)
+
             # Bouton retour en bas
             btn_retour = ttk.Button(detail_frame, text="Retour", command=lambda: self.retour_vue_principale(detail_frame), width=15)
             btn_retour.pack(pady=10)
@@ -387,28 +455,48 @@ class FabricationView(tk.Frame):
             self.detail_tree = detail_tree
             self.current_code = code
             self.current_optim = optim
-            from models.fabrication import Fabrication
-            details = Fabrication.get_details_fabrication(code, optim)
-            
+
+            # Ajout : récupération du lot sélectionné si présent
+            lot_selected = None
+            if "Lot" in self.entries:
+                lot_selected = self.entries["Lot"].get()
+ 
+            from models.database import db
+            # Utiliser get_by_code_optim pour récupérer la formule
+            formule = None
+            try:
+                if lot_selected:
+                    formule = db.formules.find_one({"code": code, "optim": optim, "lot": lot_selected})
+                else:
+                    formule = db.formules.find_one({"code": code, "optim": optim})
+            except Exception as e:
+                print(f"Erreur lors de la récupération de la formule: {str(e)}")
+
+            # Récupérer la fabrication avec le lot si possible
+            fabrication = None
+            if lot_selected:
+                fabrication = db.fabrications.find_one({"code": code, "optim": optim, "lot": lot_selected})
+            else:
+                fabrication = db.fabrications.find_one({"code": code, "optim": optim})
+
+            details = []
+            if fabrication and "detail-fabrication" in fabrication:
+                # Si detail-fabrication est un dict avec une clé 'article' (liste d'objets)
+                if isinstance(fabrication["detail-fabrication"], dict) and "article" in fabrication["detail-fabrication"]:
+                    details = fabrication["detail-fabrication"]["article"]
+                # Si detail-fabrication est déjà une liste
+                elif isinstance(fabrication["detail-fabrication"], list):
+                    details = fabrication["detail-fabrication"]
+
             if details:
                 print(f"Détails récupérés: {len(details)} éléments")
-                
-                # Au lieu de créer un nouveau Treeview, utiliser celui qui existe déjà (self.detail_tree)
-                # et ajuster ses colonnes
-                
-                # Définir des colonnes appropriées pour les détails
+                # Colonnes pour le détail
                 new_columns = (
                     "Article", "DEM", "Prix", "Quantité en stock", "Pourcentage", "Optim Formule",
-                    "Recette Formule", "Quantité Fabriquée"
+                    "Recette Formule", "Quantité Fabriquée", "Prix Total"
                 )
-                
-                # Mettre à jour la variable self.fields pour qu'elle corresponde aux colonnes du tableau
-                self.fields = list(new_columns) + ["Prix Total"]
-                
-                # Reconfigurer le Treeview existant
+                self.fields = list(new_columns)
                 self.detail_tree['columns'] = self.fields
-                
-                # Configuration des colonnes avec des largeurs appropriées
                 column_widths = {
                     "Article": 100,
                     "DEM": 80,
@@ -420,75 +508,36 @@ class FabricationView(tk.Frame):
                     "Quantité Fabriquée": 120,
                     "Prix Total": 100
                 }
-
-                # Configuration des colonnes
                 for col in self.fields:
-                    if col in column_widths:
-                        self.detail_tree.column(col, anchor="center", width=column_widths[col])
-                    else:
-                        self.detail_tree.column(col, anchor="center", width=100)
+                    self.detail_tree.column(col, anchor="center", width=column_widths.get(col, 100))
                     self.detail_tree.heading(col, text=col, anchor="center")
-                
-                # Vider le Treeview avant d'ajouter de nouveaux éléments
                 for item in self.detail_tree.get_children():
                     self.detail_tree.delete(item)
-
-                # Ajouter les détails dans le tableau
                 for detail in details:
-                    # Préparer toutes les valeurs
-                    values = []
-                    for col in self.fields:
-                        if col == "Article":
-                            values.append(detail.get("article", ""))
-                        elif col == "DEM":
-                            values.append(detail.get("dem", ""))
-                        elif col == "Prix":
-                            values.append(f"{detail.get('prix', 0)}")
-                        elif col == "Quantité en stock":
-                            values.append(f"{detail.get('quantite_stock', 0)}")
-                        elif col == "Pourcentage":
-                            values.append(f"{detail.get('pourcentage', 0)}%")
-                        elif col == "Optim Formule":
-                            values.append(detail.get("optim_formule", ""))
-                        elif col == "Recette Formule":
-                            values.append(detail.get("recette_formule", ""))
-                        elif col == "Quantité Fabriquée":
-                            values.append(f"{detail.get('quantite_fabrique', 0)}")
-                        elif col == "Prix Total":
-                            # Calculer le prix total si nécessaire
-                            if "prix_total" in detail:
-                                values.append(f"{detail.get('prix_total', 0)}")
-                            else:
-                                prix = float(detail.get('prix', 0))
-                                quantite = float(detail.get('quantite_fabrique', 0))
-                                prix_total = prix * quantite
-                                values.append(f"{prix_total}")
-                    
-                    # Insérer dans le tableau
+                    values = [
+                        detail.get("article", ""),
+                        detail.get("dem", ""),
+                        f"{detail.get('prix', 0)}",
+                        f"{detail.get('quantite_stock', 0)}",
+                        f"{detail.get('pourcentage', 0)}%",
+                        detail.get("optim_formule", ""),
+                        detail.get("recette_formule", ""),
+                        f"{detail.get('quantite_fabrique', 0)}",
+                        f"{detail.get('prix_total', float(detail.get('prix', 0)) * float(detail.get('quantite_fabrique', 0)))}"
+                    ]
                     self.detail_tree.insert('', 'end', values=values)
-                
                 print(f"Tableau mis à jour avec {len(details)} détails")
-
-                # Style pour le Treeview
                 style = ttk.Style()
-                style.configure("Treeview", rowheight=25)  # Augmente la hauteur des lignes
-                style.configure("Treeview.Heading", font=('Helvetica', 10, 'bold'))  # Style des en-têtes
-
-                # Frame pour contenir le Treeview et les scrollbars
+                style.configure("Treeview", rowheight=25)
+                style.configure("Treeview.Heading", font=('Helvetica', 10, 'bold'))
                 tree_frame = ttk.Frame(detail_frame)
                 tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-                # Mettre à jour les scrollbars pour utiliser le Treeview existant
                 scrollbar_y.config(command=self.detail_tree.yview)
                 scrollbar_x.config(command=self.detail_tree.xview)
                 self.detail_tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
-
-                # S'assurer que le Treeview est bien placé
                 self.detail_tree.pack(in_=tree_frame, fill=tk.BOTH, expand=True, side=tk.LEFT)
                 scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
                 scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
-                
-                # Marquer la fenêtre de détails comme ouverte
                 self.detail_window_open = True
                 print("Affichage des détails terminé avec succès")
 
@@ -1265,7 +1314,7 @@ class FabricationView(tk.Frame):
         except Exception as e:
             import traceback
             print(f"[ERREUR] Une erreur s'est produite lors de la sélection du DEM: {str(e)}")
-        traceback.print_exc()
+            traceback.print_exc()
 
     def get_pourcentage_article(self, code_article):
         """
@@ -1456,7 +1505,10 @@ class FabricationView(tk.Frame):
         
         # Mettre à jour MongoDB avec la liste complète
         from models.fabrication import Fabrication
-        result = Fabrication.set_details_fabrication(self.current_code, self.current_optim, details)
+        lot_value = None
+        if "Lot" in self.entries:
+            lot_value = self.entries["Lot"].get()
+        result = Fabrication.set_details_fabrication(self.current_code, self.current_optim, lot_value, details)
         print(f"Résultat de l'enregistrement des détails: matched_count={result.matched_count}, modified_count={result.modified_count}")
     
     def valider(self):
