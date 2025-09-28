@@ -199,8 +199,25 @@ class ArticleView(ttk.Frame):
         linked_table_frame.grid_rowconfigure(0, weight=1)
         linked_table_frame.grid_columnconfigure(0, weight=1)
 
-        # Liste locale des produits du formulaire
-        self.detail_products = article.get("produits", []) if article.get("produits") else []
+        # Afficher tous les produits (lignes DEM) liés à cet article depuis toutes les commandes
+        from models.database import db
+        all_commandes = list(db.commandes.find({}))
+        dem_products = []
+        for cmd in all_commandes:
+            for prod in cmd.get("produits", []):
+                if prod.get("code") == article.get("code"):
+                    # Adapter les champs pour la grid
+                    dem_products.append({
+                        "Prix": prod.get("prix_uni", prod.get("Prix", "")),
+                        "Quantité": prod.get("quantite_commande", prod.get("Quantité", "")),
+                        "DEM": prod.get("dem", prod.get("DEM", "")),
+                        "Batch": cmd.get("ref", ""),
+                        "Date fabrication": cmd.get("date_reception", ""),
+                        "Date expiration": "",
+                        "Alerte": "",
+                        "Seuil": ""
+                    })
+        self.detail_products = dem_products
         self.linked_product_tree.delete(*self.linked_product_tree.get_children())
         for prod in self.detail_products:
             self.linked_product_tree.insert("", "end", values=(

@@ -403,18 +403,19 @@ class FormuleView(ttk.Frame):
         self.compo_formule_combo.bind("<<ComboboxSelected>>", lambda e: self.update_optim_formule_combo_for_selected_formule())
 
         # NOUVEAU : Optim Formule (pour les composantes)
-        ttk.Label(parent, text="Optim Formule :").grid(row=1, column=2, padx=5, pady=(15,5))
+        self.compo_optim_formule_label = ttk.Label(parent, text="Optim Formule :")
+        self.compo_optim_formule_label.grid(row=1, column=2, padx=5, pady=(15,5))
         self.compo_optim_formule_var = tk.StringVar()
         self.compo_optim_formule_combo = ttk.Combobox(parent, textvariable=self.compo_optim_formule_var, state="readonly", width=15)
         self.compo_optim_formule_combo.grid(row=1, column=3, padx=5, pady=(15,5))
         self.compo_optim_formule_combo.bind("<<ComboboxSelected>>", self.update_recette_formule_for_composante)
 
-        
         # NOUVEAU : Recette Formule (affichage automatique)
-        ttk.Label(parent, text="Recette Formule :").grid(row=1, column=4, padx=5, pady=5)
+        self.compo_recette_formule_label = ttk.Label(parent, text="Recette Formule :")
+        self.compo_recette_formule_label.grid(row=1, column=4, padx=5, pady=(15,5))
         self.compo_recette_formule_var = tk.StringVar()
         self.compo_recette_formule_entry = ttk.Entry(parent, textvariable=self.compo_recette_formule_var, state="readonly", width=15)
-        self.compo_recette_formule_entry.grid(row=1, column=5, padx=5, pady=5)
+        self.compo_recette_formule_entry.grid(row=1, column=5, padx=5, pady=(15,5))
 
 
         # Validation pour n'accepter que des chiffres (float) pour le pourcentage
@@ -428,14 +429,14 @@ class FormuleView(ttk.Frame):
                 return False
         vcmd_float = (parent.register(validate_float), '%P')
 
-        ttk.Label(parent, text="Pourcentage :").grid(row=1, column=6, padx=5, pady=5)
+        ttk.Label(parent, text="Pourcentage :").grid(row=1, column=6, padx=5, pady=(15,5))
         self.compo_pourcentage_entry = ttk.Entry(parent, width=15, validate="key", validatecommand=vcmd_float)
-        self.compo_pourcentage_entry.grid(row=1, column=7, padx=5, pady=5)
+        self.compo_pourcentage_entry.grid(row=1, column=7, padx=5, pady=(15,5))
         self.compo_pourcentage_entry.bind('<KeyRelease>', self.update_pourcentage_info)
 
         # Boutons de gestion des composantes à côté du champ pourcentage
         btn_frame = ttk.Frame(parent)
-        btn_frame.grid(row=1, column=8, padx=5, pady=5, sticky="w")
+        btn_frame.grid(row=1, column=8, padx=5, pady=(15,5), sticky="w")
         buttons = [
             ("Ajouter composante", self.ajouter_composante),
             ("Modifier composante", self.modifier_composante),
@@ -472,14 +473,14 @@ class FormuleView(ttk.Frame):
             self.compo_optim_formule_combo['values'] = []
             self.compo_optim_formule_var.set("")
             return
-        
+
         # Extraire le code de la formule si au format "code - designation"
         formule_code = formule_selected.split(" - ")[0] if " - " in formule_selected else formule_selected
-        
-        from controllers.formule_controller import FormuleController
-        controller = FormuleController()
-        formules = controller.get_formule(formule_code)
-        optim_values = sorted({f.optim for f in formules if f.optim and f.valider()})
+
+        # Récupérer tous les optims pour ce code de formule (tous, pas seulement validés)
+        from models.formule import Formule
+        all_formules = Formule.all()
+        optim_values = sorted({f.optim for f in all_formules if f.code == formule_code and f.optim})
         self.compo_optim_formule_combo['values'] = optim_values
         if optim_values:
             self.compo_optim_formule_var.set(optim_values[0])
@@ -554,19 +555,43 @@ class FormuleView(ttk.Frame):
         """Gère le changement de type de composante (Article/Formule)"""
         # Masquer tous les combos
         self.hide_all_combos()
-        
-        # Mettre à jour le label
+
+        # Always clear pourcentage and recette fields when switching type
+        if hasattr(self, 'compo_pourcentage_entry'):
+            self.compo_pourcentage_entry.delete(0, tk.END)
+        if hasattr(self, 'compo_recette_formule_var'):
+            self.compo_recette_formule_var.set("")
+        if hasattr(self, 'compo_optim_formule_var'):
+            self.compo_optim_formule_var.set("")
+
+        # Hide/show Recette and Optim fields and labels depending on type
         if self.detail_type_var.get() == "formule":
             self.compo_type_label.config(text="Formule :")
             self.update_formule_combo_values()
             self.compo_formule_combo.grid(row=1, column=1, padx=5, pady=(15,5))
             self.update_optim_formule_combo_for_selected_formule()
+            # Show Optim/Recette widgets and labels
+            if hasattr(self, 'compo_optim_formule_label'):
+                self.compo_optim_formule_label.grid(row=1, column=2, padx=5, pady=(15,5))
+            if hasattr(self, 'compo_optim_formule_combo'):
+                self.compo_optim_formule_combo.grid(row=1, column=3, padx=5, pady=(15,5))
+            if hasattr(self, 'compo_recette_formule_label'):
+                self.compo_recette_formule_label.grid(row=1, column=4, padx=5, pady=5)
+            if hasattr(self, 'compo_recette_formule_entry'):
+                self.compo_recette_formule_entry.grid(row=1, column=5, padx=5, pady=5)
         else:
             self.compo_type_label.config(text="Article :")
             self.update_article_combo_values()
             self.compo_article_combo.grid(row=1, column=1, padx=5, pady=(15,5))
-            self.compo_optim_formule_combo['values'] = []
-            self.compo_optim_formule_var.set("")
+            # Hide Optim/Recette widgets and labels for article
+            if hasattr(self, 'compo_optim_formule_label'):
+                self.compo_optim_formule_label.grid_remove()
+            if hasattr(self, 'compo_optim_formule_combo'):
+                self.compo_optim_formule_combo.grid_remove()
+            if hasattr(self, 'compo_recette_formule_label'):
+                self.compo_recette_formule_label.grid_remove()
+            if hasattr(self, 'compo_recette_formule_entry'):
+                self.compo_recette_formule_entry.grid_remove()
 
     def hide_all_combos(self):
         """Masque tous les comboboxes de sélection"""
@@ -582,27 +607,25 @@ class FormuleView(ttk.Frame):
     def update_article_combo_values(self):
         """Met à jour le combobox articles avec groupes simulés et recherche dynamique"""
         if hasattr(self, 'compo_article_combo'):
-            from models.article import ArticleModel
-            article_model = ArticleModel()
-            articles = article_model.articles
-            additifs = [a for a in articles if a.get('type') == 'additif']
-            matieres = [a for a in articles if a.get('type') == 'matiere premiere']
-            # Groupes simulés
+            from models.database import db
+            # Aggregate all DEM/product lines for all articles from commandes
+            all_commandes = list(db.commandes.find({}))
+            seen = set()
             values = []
-            if additifs:
-                values.append('--- Additifs ---')
-                values += [f"{a['code']} - {a.get('designation', '')}" for a in additifs]
-            if matieres:
-                values.append('--- Matières premières ---')
-                values += [f"{a['code']} - {a.get('designation', '')}" for a in matieres]
+            for cmd in all_commandes:
+                for prod in cmd.get('produits', []):
+                    code = prod.get('code', '')
+                    if code and code not in seen:
+                        values.append(code)
+                        seen.add(code)
+            values.sort()
             self.compo_article_combo['values'] = values
             self.compo_article_combo.set("")
             # Recherche dynamique
             def on_keyrelease(event):
                 typed = self.compo_article_combo.get().lower()
-                filtered = [v for v in values if typed in v.lower() or v.startswith('---')]
+                filtered = [v for v in values if typed in v.lower()]
                 self.compo_article_combo['values'] = filtered if typed else values
-                # Affiche la dropdown si filtré
                 if filtered:
                     self.compo_article_combo.event_generate('<Down>')
             self.compo_article_combo.bind('<KeyRelease>', on_keyrelease)
