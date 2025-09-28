@@ -4,12 +4,13 @@ from tkinter import ttk
 from datetime import datetime
 from models.formule import FormuleManager
 from tkcalendar import DateEntry
-
 class FabricationView(tk.Frame):
+    def __init__(self, master=None):
+        # Frame de détails courant (pour éviter les doublons)
+        self.detail_frame = None
     def __init__(self, master=None):
         super().__init__(master)
         self.pack(fill=tk.BOTH, expand=True)
-        
         # Initialiser le gestionnaire de formules
         self.formule_manager = FormuleManager()
         
@@ -259,10 +260,17 @@ class FabricationView(tk.Frame):
         try:
             print(f"\n=== DÉBUT AFFICHAGE DÉTAILS ===")
             print(f"Affichage des détails pour code: '{code}', optim: '{optim}'")
-            
+            # Fermer le frame de détails précédent s'il existe
+            if hasattr(self, 'detail_frame') and self.detail_frame is not None:
+                try:
+                    self.detail_frame.destroy()
+                except Exception:
+                    pass
+                self.detail_frame = None
             # Créer un nouveau Frame pour les détails
-            detail_frame = ttk.Frame(self)
-            detail_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+            self.detail_frame = ttk.Frame(self)
+            self.detail_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+            detail_frame = self.detail_frame
 
             # Frame pour les champs de saisie en haut
             fields_frame = ttk.Frame(detail_frame)
@@ -1036,7 +1044,7 @@ class FabricationView(tk.Frame):
             formule_composante = db.formules.find_one({"code": article_code})
             if formule_composante:
                 # Ajout/Mise à jour du combobox Lot dans la section détail
-                lots_disponibles = []
+                lots_disponibles = set()
                 # Récupérer les lots depuis la base fabrication pour cette recette et cet optim
                 recette_value = formule_composante.get("recette_code", "")
                 optim_value = formule_composante.get("optim", "")
@@ -1048,7 +1056,8 @@ class FabricationView(tk.Frame):
                 for fab in lots_cursor:
                     lot_val = fab.get("lot")
                     if lot_val:
-                        lots_disponibles.append(str(lot_val))
+                        lots_disponibles.add(str(lot_val))
+                lots_list = sorted(lots_disponibles)
 
                 # Créer ou mettre à jour le combobox Lot dans la section détail
                 if "Lot" not in self.detail_entries:
@@ -1056,14 +1065,14 @@ class FabricationView(tk.Frame):
                     lot_frame = ttk.Frame(event.widget.master)
                     lot_frame.pack(side=tk.LEFT, padx=2)
                     ttk.Label(lot_frame, text="Lot:").pack(side=tk.LEFT, padx=(0, 2))
-                    lot_combo = ttk.Combobox(lot_frame, width=12, state="readonly", values=lots_disponibles)
+                    lot_combo = ttk.Combobox(lot_frame, width=12, state="readonly", values=lots_list)
                     lot_combo.pack(side=tk.LEFT)
                     lot_combo.bind('<<ComboboxSelected>>', on_lot_selected)
                     self.detail_entries["Lot"] = lot_combo
                 else:
                     lot_combo = self.detail_entries["Lot"]
-                    lot_combo["values"] = lots_disponibles
-                    lot_combo.set(lots_disponibles[0] if lots_disponibles else "")
+                    lot_combo["values"] = lots_list
+                    lot_combo.set(lots_list[0] if lots_list else "")
                     lot_combo.unbind('<<ComboboxSelected>>')
                     lot_combo.bind('<<ComboboxSelected>>', on_lot_selected)
                 optim_value = formule_composante.get("optim", "")
