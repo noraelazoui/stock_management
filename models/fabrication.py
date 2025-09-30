@@ -65,15 +65,13 @@ class Fabrication:
                     article_code = article_name.split(" - ")[0] if " - " in article_name else article_name
                     # Vérifier si c'est une formule
                     formule_doc = db.formules.find_one({"code": article_code})
+                    pourcentage = float(comp.get("pourcentage", 0))
+                    quantite_fabrique = (pourcentage * quantite) / 100
                     if formule_doc:
                         # Cas formule : récupérer les champs spécifiques
-                        pourcentage = float(comp.get("pourcentage", 0))
-                        quantite_fabrique = (pourcentage * quantite) / 100
-
                         optim_value = formule_doc.get("optim", "")
                         recette_value = formule_doc.get("recette_code", "")
                         fabrication_formule = db.fabrications.find_one({"code": article_code, "optim": optim_value, "recette_code": recette_value})
-                         
                         print(f"[DEBUG] fabrication_formule: {fabrication_formule}")
                         if fabrication_formule:
                             prix_formule_composante = float(fabrication_formule.get("prix_formule", 0))
@@ -91,19 +89,21 @@ class Fabrication:
                             "quantite_stock": quantite_stock,
                             "pourcentage": pourcentage,
                             "optim": optim_value,
-                            
                             "recette": recette_value,
                             "quantite_fabrique": round(quantite_fabrique, 2),
                             "prix_total": prix_total,
                             "fabrication_id": fabrication_id
                         }
                         details.append(detail)
+                        # Décrémenter le stock du premix utilisé
+                        db.articles.update_one(
+                            {"code": article_code},
+                            {"$inc": {"quantite": -quantite_fabrique}}
+                        )
                     else:
                         # Cas article classique
                         article = db.articles.find_one({"code": article_code})
                         if article:
-                            pourcentage = float(comp.get("pourcentage", 0))
-                            quantite_fabrique = (pourcentage * quantite) / 100
                             prix = float(article.get("prix", 0))
                             prix_total = round((prix * pourcentage * quantite) / 100, 2)
                             prix_total_somme += prix_total  # Ajouter au total
@@ -115,11 +115,14 @@ class Fabrication:
                                 "pourcentage": pourcentage,
                                 "quantite_fabrique": round(quantite_fabrique, 2),
                                 "prix_total": prix_total,
-                                "fabrication_id": fabrication_id,
-                                "optim": "",
-                                "recette": ""
+                                "fabrication_id": fabrication_id
                             }
                             details.append(detail)
+                            # Décrémenter le stock de la matière première
+                            db.articles.update_one(
+                                {"code": article_code},
+                                {"$inc": {"quantite": -quantite_fabrique}}
+                            )
                 # Calculer le prix_formule comme la somme des prix_total divisée par la quantité fabriquée
                 prix_formule_initial = round(prix_total_somme / quantite, 4) if quantite else 0.0
                 print(f"[DEBUG] Calcul prix_formule: somme_prix_total={prix_total_somme}, quantite_a_fabriquer={quantite}, prix_formule_calculé={prix_formule_initial}")

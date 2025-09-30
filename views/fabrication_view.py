@@ -1002,7 +1002,7 @@ class FabricationView(tk.Frame):
             print(f"Erreur lors de la suppression: {str(e)}")
 
     def on_article_selected(self, event):
-
+        print(f"[DEBUG] on_article_selected called")
         # Ajout d'un événement pour le combobox Lot afin de remplir Prix et Quantité en stock
         def on_lot_selected(event_lot):
             # Rendre les champs modifiables
@@ -1038,7 +1038,9 @@ class FabricationView(tk.Frame):
         Met à jour le combobox DEM et les champs Prix et Quantité en stock pour les articles, sinon laisse vides pour les formules (seul le pourcentage s'affiche, sauf si la formule est fabriquée : alors afficher prix et quantité).
         """
         try:
+            print("[DEBUG] on_article_selected called")
             article_code = self.detail_entries["Article"].get()
+            print(f"[DEBUG] Article code selected: {article_code}")
             from models.database import db
             # Vérifier si l'article sélectionné est une formule
             formule_composante = db.formules.find_one({"code": article_code})
@@ -1116,14 +1118,21 @@ class FabricationView(tk.Frame):
             else:
                 # Si c'est un article, remplir DEM, Prix et Quantité en stock
                 article = db.articles.find_one({"code": article_code})
+                print(f"[DEBUG] Article object from DB: {article}")
                 if article:
                     dem_values = set()
                     if article.get("dem"):
+                        print(f"[DEBUG] Article has 'dem' field: {article['dem']}")
                         dem_values.add(article["dem"])
-                    for produit in article.get("produits", []):
+                    produits = article.get("produits", [])
+                    print(f"[DEBUG] Produits list: {produits}")
+                    for produit in produits:
+                        print(f"[DEBUG] Inspecting produit: {produit}")
                         if produit.get("DEM"):
+                            print(f"[DEBUG] Produit has DEM: {produit['DEM']}")
                             dem_values.add(produit["DEM"])
                     dem_values = sorted(list(dem_values))
+                    print(f"[DEBUG] DEM values found for article {article_code}: {dem_values}")
                     dem_combobox = self.detail_entries["DEM"]
                     if dem_values:
                         dem_combobox["values"] = dem_values
@@ -1212,16 +1221,16 @@ class FabricationView(tk.Frame):
                         # Si c'est une formule, vider le combobox DEM
                         dem_combo['values'] = []
                         dem_combo.set('')
-                        print("Combobox DEM vidé car l'article sélectionné est une formule")
+                        print("[DEBUG] (Fallback) Combobox DEM vidé car l'article sélectionné est une formule")
                     else:
                         # Si c'est un article normal, afficher les DEMs
                         dem_combo['values'] = dems
                         if dems:
                             dem_combo.set(dems[0])
-                            print(f"Combobox DEM mis à jour avec: {dems}")
+                            print(f"[DEBUG] (Fallback) Combobox DEM mis à jour avec: {dems}")
                         else:
                             dem_combo.set('')
-                            print("Aucune DEM trouvée pour cet article")
+                            print("[DEBUG] (Fallback) Aucune DEM trouvée pour cet article")
             
             # Récupérer la formule actuelle
             formule = None
