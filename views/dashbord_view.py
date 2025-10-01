@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
+from tkcalendar import DateEntry
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,13 +40,18 @@ class StockView(tk.Frame):
             tab.grid_rowconfigure(0, weight=1)
             tab.grid_columnconfigure(0, weight=1)
 
+        # Initialize filter variables for fabrication
+        self.date_from = None
+        self.date_to = None
+        self.filter_dem = tk.StringVar(value="Tous")
+        self.filter_lot = tk.StringVar(value="Tous")
+
         # Bouton Actualiser pour Stock Article
         self.btn_actualiser_article = ttk.Button(self.tab_stock_article, text="Actualiser", command=self.refresh_stock_article)
         self.btn_actualiser_article.pack(anchor="ne", padx=10, pady=8)
 
-        # Bouton Actualiser pour Stock Fabrication
-        self.btn_actualiser_fabrication = ttk.Button(self.tab_stock_fabrication, text="Actualiser", command=self.refresh_stock_fabrication)
-        self.btn_actualiser_fabrication.pack(anchor="ne", padx=10, pady=8)
+        # Setup Stock Fabrication tab with filters
+        self.setup_fabrication_filters()
 
         # Bouton Actualiser pour Inventaire de stock
         self.btn_actualiser_inventaire = ttk.Button(self.tab_inventaire_stock, text="Actualiser", command=self.refresh_inventaire_stock)
@@ -55,6 +61,61 @@ class StockView(tk.Frame):
         self.afficher_stock_article()
         self.afficher_stock_fabrication()
         self.afficher_inventaire_stock()
+    def setup_fabrication_filters(self):
+        """Setup filter frame for Stock Fabrication tab"""
+        # Filter frame at the top
+        filter_frame = ttk.LabelFrame(self.tab_stock_fabrication, text="Filtres", padding=10)
+        filter_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        # Date range filter
+        date_frame = ttk.Frame(filter_frame)
+        date_frame.pack(side=tk.LEFT, padx=10)
+
+        ttk.Label(date_frame, text="Date de:").grid(row=0, column=0, padx=5, sticky="e")
+        self.date_from_entry = DateEntry(date_frame, width=12, background='darkblue',
+                                         foreground='white', borderwidth=2, date_pattern='dd/mm/yyyy')
+        self.date_from_entry.grid(row=0, column=1, padx=5)
+
+        ttk.Label(date_frame, text="à:").grid(row=0, column=2, padx=5, sticky="e")
+        self.date_to_entry = DateEntry(date_frame, width=12, background='darkblue',
+                                       foreground='white', borderwidth=2, date_pattern='dd/mm/yyyy')
+        self.date_to_entry.grid(row=0, column=3, padx=5)
+
+        # DEM filter
+        dem_frame = ttk.Frame(filter_frame)
+        dem_frame.pack(side=tk.LEFT, padx=10)
+
+        ttk.Label(dem_frame, text="DEM:").pack(side=tk.LEFT, padx=5)
+        self.dem_combobox = ttk.Combobox(dem_frame, textvariable=self.filter_dem, width=15, state="readonly")
+        self.dem_combobox.pack(side=tk.LEFT, padx=5)
+
+        # Lot filter
+        lot_frame = ttk.Frame(filter_frame)
+        lot_frame.pack(side=tk.LEFT, padx=10)
+
+        ttk.Label(lot_frame, text="Lot:").pack(side=tk.LEFT, padx=5)
+        self.lot_combobox = ttk.Combobox(lot_frame, textvariable=self.filter_lot, width=15, state="readonly")
+        self.lot_combobox.pack(side=tk.LEFT, padx=5)
+
+        # Button frame
+        button_frame = ttk.Frame(filter_frame)
+        button_frame.pack(side=tk.LEFT, padx=10)
+
+        # Apply filter button
+        self.btn_appliquer_filtre = ttk.Button(button_frame, text="Appliquer", 
+                                               command=self.apply_fabrication_filters, width=12)
+        self.btn_appliquer_filtre.pack(side=tk.LEFT, padx=5)
+
+        # Reset filter button
+        self.btn_reset_filtre = ttk.Button(button_frame, text="Réinitialiser", 
+                                           command=self.reset_fabrication_filters, width=12)
+        self.btn_reset_filtre.pack(side=tk.LEFT, padx=5)
+
+        # Actualiser button
+        self.btn_actualiser_fabrication = ttk.Button(button_frame, text="Actualiser", 
+                                                     command=self.refresh_stock_fabrication, width=12)
+        self.btn_actualiser_fabrication.pack(side=tk.LEFT, padx=5)
+
     def refresh_inventaire_stock(self):
         # Efface le contenu de l'onglet et recharge
         for widget in self.tab_inventaire_stock.winfo_children():
@@ -62,25 +123,275 @@ class StockView(tk.Frame):
                 widget.destroy()
         self.afficher_inventaire_stock()
 
+    def apply_fabrication_filters(self):
+        """Apply filters to fabrication stock"""
+        for widget in self.tab_stock_fabrication.winfo_children():
+            if not isinstance(widget, ttk.LabelFrame):  # Keep filter frame
+                widget.destroy()
+        self.afficher_stock_fabrication(apply_filters=True)
+
+    def reset_fabrication_filters(self):
+        """Reset all filters to default"""
+        self.filter_dem.set("Tous")
+        self.filter_lot.set("Tous")
+        # Reset dates to today
+        self.date_from_entry.set_date(datetime.now())
+        self.date_to_entry.set_date(datetime.now())
+        # Refresh display
+        self.apply_fabrication_filters()
+
+    def get_filtered_fabrications(self, fabrications):
+        """Filter fabrications based on selected criteria"""
+        if not fabrications:
+            return []
+
+        filtered = []
+        date_from = self.date_from_entry.get_date() if hasattr(self, 'date_from_entry') else None
+        date_to = self.date_to_entry.get_date() if hasattr(self, 'date_to_entry') else None
+        dem_filter = self.filter_dem.get()
+        lot_filter = self.filter_lot.get()
+
+        for fab in fabrications:
+            # Date filter
+            if date_from and date_to:
+                fab_date_str = fab.get("date_fabrication", "")
+                if fab_date_str and fab_date_str != "-":
+                    try:
+                        # Try multiple date formats
+                        fab_date = None
+                        for fmt in ["%d/%m/%Y", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S"]:
+                            try:
+                                fab_date = datetime.strptime(fab_date_str, fmt).date()
+                                break
+                            except ValueError:
+                                continue
+                        
+                        if fab_date and not (date_from <= fab_date <= date_to):
+                            continue
+                    except Exception:
+                        pass  # Skip if date format is invalid
+
+            # DEM filter
+            if dem_filter and dem_filter != "Tous":
+                # Get DEM from details (check both 'details' and 'detail-fabrication')
+                details = fab.get("details", fab.get("detail-fabrication", []))
+                has_dem = False
+                for detail in details:
+                    # Check if detail is dict (article info embedded) or string (article code)
+                    if isinstance(detail, dict):
+                        dem_value = detail.get("dem") or detail.get("DEM") or detail.get("Dem", "")
+                        if dem_value == dem_filter:
+                            has_dem = True
+                            break
+                if not has_dem:
+                    continue
+
+            # Lot filter
+            if lot_filter and lot_filter != "Tous":
+                fab_lot = fab.get("lot", "")
+                if fab_lot != lot_filter:
+                    continue
+
+            filtered.append(fab)
+
+        return filtered
+
     def afficher_inventaire_stock(self):
         """
-        Affiche la liste complète des articles dans l'onglet Inventaire de stock
+        Affiche la liste complète des articles dans l'onglet Inventaire de stock avec DEM (sans Lot)
+        Permet de cliquer sur un article pour voir les détails avec DEM
         """
+        # Main container with PanedWindow for split view
+        main_container = ttk.PanedWindow(self.tab_inventaire_stock, orient=tk.HORIZONTAL)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Left panel: Article list
+        left_frame = ttk.Frame(main_container)
+        main_container.add(left_frame, weight=2)
+        
+        # Articles table
         articles = self.controller.get_inventaire()
-        columns = ("Code", "Désignation", "Type", "Quantité", "Prix")
-        tree = ttk.Treeview(self.tab_inventaire_stock, columns=columns, show="headings", height=18)
+        columns = ("Code", "Désignation", "Type", "DEM", "Quantité", "Prix")
+        self.inventaire_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=20)
+        
+        # Configure columns with better widths (removed Lot)
+        column_widths = {
+            "Code": 120,
+            "Désignation": 220,
+            "Type": 130,
+            "DEM": 120,
+            "Quantité": 100,
+            "Prix": 100
+        }
+        
         for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, anchor="center", width=120)
+            self.inventaire_tree.heading(col, text=col)
+            self.inventaire_tree.column(col, anchor="center", width=column_widths.get(col, 120))
+        
+        # Store articles data for detail view
+        self.articles_data = {}
+        
         for art in articles:
-            tree.insert("", "end", values=(
-                art.get("code", "-"),
-                art.get("designation", art.get("name", "-")),
-                art.get("type", "-"),
-                art.get("quantite", art.get("quantity", 0)),
-                art.get("prix", "-")
-            ))
-        tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+            # Check if article has products (DEMs) array
+            produits = art.get("produits", [])
+            
+            if produits:
+                # Display each DEM as a separate row
+                for produit in produits:
+                    dem_value = produit.get("dem", "-")
+                    prix_value = produit.get("price", "-")
+                    quantite_value = produit.get("quantity", 0)
+                    
+                    item_id = self.inventaire_tree.insert("", "end", values=(
+                        art.get("code", "-"),
+                        art.get("designation", art.get("name", "-")),
+                        art.get("type", "-"),
+                        dem_value,
+                        quantite_value,
+                        prix_value
+                    ))
+                    # Store full article data with product info
+                    self.articles_data[item_id] = {**art, **produit, "current_dem": dem_value}
+            else:
+                # Fallback: Display article without DEM details
+                dem_value = art.get("dem") or art.get("DEM") or art.get("Dem", "-")
+                
+                item_id = self.inventaire_tree.insert("", "end", values=(
+                    art.get("code", "-"),
+                    art.get("designation", art.get("name", "-")),
+                    art.get("type", "-"),
+                    dem_value,
+                    art.get("quantite", art.get("quantity", 0)),
+                    art.get("prix", art.get("price", "-"))
+                ))
+                # Store full article data
+                self.articles_data[item_id] = art
+        
+        # Scrollbar for tree
+        scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.inventaire_tree.yview)
+        self.inventaire_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.inventaire_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bind selection event
+        self.inventaire_tree.bind("<<TreeviewSelect>>", self.on_inventaire_select)
+        
+        # Right panel: Article details
+        right_frame = ttk.LabelFrame(main_container, text="Détails de l'article", padding=15)
+        main_container.add(right_frame, weight=1)
+        
+        # Details display area
+        self.detail_text = tk.Text(right_frame, wrap=tk.WORD, font=("Arial", 11), 
+                                    bg="#f9f9f9", relief=tk.FLAT, padx=10, pady=10)
+        self.detail_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Configure text tags for styling
+        self.detail_text.tag_configure("title", font=("Arial", 14, "bold"), foreground="#2c3e50")
+        self.detail_text.tag_configure("label", font=("Arial", 11, "bold"), foreground="#34495e")
+        self.detail_text.tag_configure("value", font=("Arial", 11), foreground="#555")
+        self.detail_text.tag_configure("dem_highlight", font=("Arial", 12, "bold"), 
+                                      foreground="#e74c3c", background="#ffeaa7")
+        self.detail_text.tag_configure("separator", font=("Arial", 10), foreground="#bdc3c7")
+        
+        # Initial message
+        self.detail_text.insert("1.0", "\n\n\n    Cliquez sur un article\n    pour voir les détails", "title")
+        self.detail_text.config(state=tk.DISABLED)
+    
+    def on_inventaire_select(self, event):
+        """Handle article selection in inventory to show details"""
+        selection = self.inventaire_tree.selection()
+        if not selection:
+            return
+        
+        item_id = selection[0]
+        article = self.articles_data.get(item_id)
+        
+        if not article:
+            return
+        
+        # Clear detail text
+        self.detail_text.config(state=tk.NORMAL)
+        self.detail_text.delete("1.0", tk.END)
+        
+        # Display article details with DEM highlighted
+        self.detail_text.insert(tk.END, "Article Sélectionné\n", "title")
+        self.detail_text.insert(tk.END, "=" * 40 + "\n\n", "separator")
+        
+        # Code
+        self.detail_text.insert(tk.END, "Code: ", "label")
+        self.detail_text.insert(tk.END, f"{article.get('code', '-')}\n\n", "value")
+        
+        # Désignation
+        self.detail_text.insert(tk.END, "Désignation: ", "label")
+        self.detail_text.insert(tk.END, f"{article.get('designation', article.get('name', '-'))}\n\n", "value")
+        
+        # Type
+        self.detail_text.insert(tk.END, "Type: ", "label")
+        self.detail_text.insert(tk.END, f"{article.get('type', '-')}\n\n", "value")
+        
+        # DEM (highlighted) - check both current_dem and dem fields
+        dem_value = article.get("current_dem") or article.get("dem") or article.get("DEM") or article.get("Dem", "-")
+        self.detail_text.insert(tk.END, "DEM: ", "label")
+        self.detail_text.insert(tk.END, f"  {dem_value}  ", "dem_highlight")
+        self.detail_text.insert(tk.END, "\n\n", "value")
+        
+        # Batch/Lot (if available)
+        if article.get("batch"):
+            self.detail_text.insert(tk.END, "Lot: ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('batch', '-')}\n\n", "value")
+        
+        # Quantité - prioritize product quantity
+        self.detail_text.insert(tk.END, "Quantité en stock: ", "label")
+        quantite = article.get("quantity", article.get("quantite", 0))
+        self.detail_text.insert(tk.END, f"{quantite}\n\n", "value")
+        
+        # Prix - prioritize product price
+        self.detail_text.insert(tk.END, "Prix unitaire: ", "label")
+        prix = article.get("price", article.get("prix", "-"))
+        self.detail_text.insert(tk.END, f"{prix}\n\n", "value")
+        
+        # Additional info if available
+        self.detail_text.insert(tk.END, "\n" + "=" * 40 + "\n", "separator")
+        self.detail_text.insert(tk.END, "Informations supplémentaires\n\n", "title")
+        
+        # Manufacturing date
+        if article.get("manufacturing_date"):
+            self.detail_text.insert(tk.END, "Date de fabrication: ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('manufacturing_date', '-')}\n\n", "value")
+        
+        # Expiration date
+        if article.get("expiration_date"):
+            self.detail_text.insert(tk.END, "Date d'expiration: ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('expiration_date', '-')}\n\n", "value")
+        
+        # Alert months
+        if article.get("alert_months"):
+            self.detail_text.insert(tk.END, "Alerte (mois): ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('alert_months', '-')}\n\n", "value")
+        
+        # Threshold
+        if article.get("threshold"):
+            self.detail_text.insert(tk.END, "Seuil minimal: ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('threshold', '-')}\n\n", "value")
+        
+        # Fournisseur / Supplier
+        supplier = article.get("fournisseur") or article.get("supplier")
+        if supplier:
+            self.detail_text.insert(tk.END, "Fournisseur: ", "label")
+            self.detail_text.insert(tk.END, f"{supplier}\n\n", "value")
+        
+        # Date création
+        if article.get("date_creation"):
+            self.detail_text.insert(tk.END, "Date de création: ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('date_creation', '-')}\n\n", "value")
+        
+        # Description
+        if article.get("description"):
+            self.detail_text.insert(tk.END, "Description: ", "label")
+            self.detail_text.insert(tk.END, f"{article.get('description', '-')}\n", "value")
+        
+        self.detail_text.config(state=tk.DISABLED)
 
     def refresh_stock_article(self):
         # Efface le contenu de l'onglet et recharge
@@ -90,9 +401,9 @@ class StockView(tk.Frame):
         self.afficher_stock_article()
 
     def refresh_stock_fabrication(self):
-        # Efface le contenu de l'onglet et recharge
+        # Efface le contenu de l'onglet et recharge (keep filter frame)
         for widget in self.tab_stock_fabrication.winfo_children():
-            if widget != self.btn_actualiser_fabrication:
+            if not isinstance(widget, ttk.LabelFrame):  # Keep filter frame
                 widget.destroy()
         self.afficher_stock_fabrication()
 
@@ -206,33 +517,95 @@ class StockView(tk.Frame):
                 canvas_pie.draw()
                 canvas_pie.get_tk_widget().pack(fill=tk.X, padx=30, pady=8)
 
-    def afficher_stock_fabrication(self):
+    def afficher_stock_fabrication(self, apply_filters=False):
         """
-        Affiche la liste des fabrications dans l'onglet Stock Fabrication
+        Affiche la liste des fabrications dans l'onglet Stock Fabrication avec filtres
         """
-        columns = ("Code", "Optim", "Recette", "Nb Composantes", "Quantité à fabriquer", "Date Fabrication", "Lot", "Prix Formule")
-        tree = ttk.Treeview(self.tab_stock_fabrication, columns=columns, show="headings", height=16)
+        # Data container frame
+        data_frame = ttk.Frame(self.tab_stock_fabrication)
+        data_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Enhanced columns with DEM
+        columns = ("Code", "Optim", "Recette", "DEM", "Lot", "Nb Composantes", 
+                   "Quantité à fabriquer", "Date Fabrication", "Prix Formule")
+        tree = ttk.Treeview(data_frame, columns=columns, show="headings", height=12)
+        
+        # Configure column widths
+        column_widths = {
+            "Code": 100,
+            "Optim": 80,
+            "Recette": 100,
+            "DEM": 100,
+            "Lot": 100,
+            "Nb Composantes": 120,
+            "Quantité à fabriquer": 150,
+            "Date Fabrication": 120,
+            "Prix Formule": 100
+        }
+        
         for col in columns:
             tree.heading(col, text=col)
-            tree.column(col, anchor="center", width=120)
-        tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+            tree.column(col, anchor="center", width=column_widths.get(col, 120))
+        tree.pack(fill=tk.BOTH, expand=True, side=tk.TOP)
+
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(data_frame, orient="vertical", command=tree.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.configure(yscrollcommand=scrollbar.set)
 
         # Import FabricationController ici pour éviter les imports circulaires
         from controllers.fabrication_controller import FabricationController
         fabrication_controller = FabricationController()
         fabrications = fabrication_controller.get_all_fabrications()
+
+        # Apply filters if requested
+        if apply_filters:
+            fabrications = self.get_filtered_fabrications(fabrications)
+
+        # Update filter comboboxes with unique values
+        if not apply_filters:
+            self.update_filter_comboboxes(fabrications)
+
         codes = []
         quantites = []
         dates = []
         for fab in fabrications:
+            # Extract DEM from first detail article (or aggregate multiple DEMs)
+            dem_list = []
+            details = fab.get("details", fab.get("detail-fabrication", []))
+            for detail in details:
+                # Check if detail is a dict with embedded article info or separate article reference
+                if isinstance(detail, dict):
+                    dem_value = detail.get("dem") or detail.get("DEM") or detail.get("Dem", "")
+                    if dem_value and dem_value not in dem_list:
+                        dem_list.append(dem_value)
+            dem_display = ", ".join(dem_list) if dem_list else "-"
+            
+            # Format date for display
+            date_str = fab.get("date_fabrication", "-")
+            date_display = date_str
+            if date_str and date_str != "-":
+                try:
+                    # Try to parse and format the date nicely
+                    for fmt in ["%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d", "%d/%m/%Y", "%d/%m/%Y %H:%M:%S"]:
+                        try:
+                            parsed_date = datetime.strptime(date_str, fmt)
+                            date_display = parsed_date.strftime("%d/%m/%Y")
+                            break
+                        except ValueError:
+                            continue
+                except Exception:
+                    date_display = date_str
+            
             tree.insert("", "end", values=(
                 fab.get("code", "-"),
                 fab.get("optim", "-"),
                 fab.get("recette_code", "-"),
+                dem_display,
+                fab.get("lot", "-"),
                 fab.get("nb_composantes", "-"),
                 fab.get("quantite_a_fabriquer", "-"),
-                fab.get("date_fabrication", "-"),
-                fab.get("lot", "-"),
+                date_display,
                 fab.get("prix_formule", "-")
             ))
             codes.append(fab.get("code", "-"))
@@ -240,7 +613,7 @@ class StockView(tk.Frame):
                 quantites.append(float(fab.get("quantite_a_fabriquer", 0)))
             except Exception:
                 quantites.append(0)
-            dates.append(str(fab.get("date_fabrication", "-")))
+            dates.append(date_display)
 
         # Ajout du graphique vertical sous le tableau
         pastel_colors = ["#6EC6FF", "#FFB74D", "#81C784", "#FFD54F", "#BA68C8", "#4DD0E1", "#FF8A65", "#A1887F", "#90A4AE", "#F06292", "#9575CD", "#AED581", "#FFF176", "#E57373", "#64B5F6"]
@@ -270,8 +643,63 @@ class StockView(tk.Frame):
 
         mplcursors.cursor(bars, hover=True).connect("add", lambda sel: sel.annotation.set_text(f"{codes[sel.index]}: {quantites[sel.index]}\n{dates[sel.index]}") )
 
-        canvas = FigureCanvasTkAgg(fig, master=self.tab_stock_fabrication)
+        canvas = FigureCanvasTkAgg(fig, master=data_frame)
         canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.X, padx=30, pady=8)
+        canvas.get_tk_widget().pack(fill=tk.X, padx=10, pady=8)
+
+        # Add summary statistics
+        self.add_fabrication_summary(data_frame, fabrications)
+
+    def update_filter_comboboxes(self, fabrications):
+        """Update filter comboboxes with unique values from fabrications"""
+        # Extract unique DEMs
+        dems = set(["Tous"])
+        lots = set(["Tous"])
+        
+        for fab in fabrications:
+            # Get DEMs from details (check both 'details' and 'detail-fabrication')
+            details = fab.get("details", fab.get("detail-fabrication", []))
+            for detail in details:
+                if isinstance(detail, dict):
+                    dem_value = detail.get("dem") or detail.get("DEM") or detail.get("Dem", "")
+                    if dem_value:
+                        dems.add(dem_value)
+            
+            # Get Lot
+            lot_value = fab.get("lot", "")
+            if lot_value and lot_value != "-":
+                lots.add(lot_value)
+        
+        # Update comboboxes
+        self.dem_combobox['values'] = sorted(list(dems))
+        self.lot_combobox['values'] = sorted(list(lots))
+
+    def add_fabrication_summary(self, parent_frame, fabrications):
+        """Add summary statistics section"""
+        summary_frame = ttk.LabelFrame(parent_frame, text="Statistiques", padding=10)
+        summary_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        # Calculate statistics
+        total_fabrications = len(fabrications)
+        total_quantite = sum(float(fab.get("quantite_a_fabriquer", 0)) for fab in fabrications)
+        
+        # Count by lot
+        lot_counts = {}
+        for fab in fabrications:
+            lot = fab.get("lot", "-")
+            lot_counts[lot] = lot_counts.get(lot, 0) + 1
+
+        # Display statistics in grid
+        stats_frame = ttk.Frame(summary_frame)
+        stats_frame.pack(fill=tk.X)
+
+        ttk.Label(stats_frame, text="Total Fabrications:", font=("Arial", 10, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ttk.Label(stats_frame, text=str(total_fabrications), font=("Arial", 10)).grid(row=0, column=1, padx=10, pady=5, sticky="w")
+
+        ttk.Label(stats_frame, text="Quantité Totale:", font=("Arial", 10, "bold")).grid(row=0, column=2, padx=10, pady=5, sticky="w")
+        ttk.Label(stats_frame, text=f"{total_quantite:.2f}", font=("Arial", 10)).grid(row=0, column=3, padx=10, pady=5, sticky="w")
+
+        ttk.Label(stats_frame, text="Lots Uniques:", font=("Arial", 10, "bold")).grid(row=0, column=4, padx=10, pady=5, sticky="w")
+        ttk.Label(stats_frame, text=str(len(lot_counts)), font=("Arial", 10)).grid(row=0, column=5, padx=10, pady=5, sticky="w")
 
     
