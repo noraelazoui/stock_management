@@ -25,9 +25,22 @@ class CommandeController:
         self.view.tree.delete(*self.view.tree.get_children())
         for c in self.model.commandes:
             if "ref" in c:
+                # Get first info from infos_commande_detail if exists
+                info_detail = c.get("infos_commande_detail", [{}])[0] if c.get("infos_commande_detail") else {}
+                infos_gen = c.get("infos_commande", [{}])[0] if c.get("infos_commande") else {}
+                
                 self.view.tree.insert("", "end", values=(
-                    c["ref"], 
-                    c.get("date_reception", ""), 
+                    c.get("ref", ""), 
+                    c.get("date_reception", ""),
+                    info_detail.get("mode", ""),
+                    info_detail.get("fournisseur", c.get("fournisseur", "")),
+                    info_detail.get("payement", ""),
+                    info_detail.get("transport", ""),
+                    info_detail.get("adresse", ""),
+                    info_detail.get("numero", ""),
+                    infos_gen.get("statut", c.get("statut", "")),
+                    infos_gen.get("remarque", ""),
+                    infos_gen.get("utilisateur", ""),
                     "Détail"
                 ))
 
@@ -77,34 +90,9 @@ class CommandeController:
                 tree.insert("", "end", values=values)
                 print(f"DEBUG - Produit inséré: {values}")
 
-        # === CHARGEMENT DU TABLEAU INFOS COMMANDE (Mode, Date, Fournisseur, etc.) ===
-        if hasattr(detail_frame, 'info_commande_table'):
-            info_table = detail_frame.info_commande_table
-            info_table.delete(*info_table.get_children())
-            
-            # Utiliser le champ 'infos_commande_detail' pour les infos de commande
-            infos_commande_detail = commande.get("infos_commande_detail", [])
-            print(f"DEBUG - infos_commande_detail à charger: {infos_commande_detail}")
-            
-            for info in infos_commande_detail:
-                if isinstance(info, dict):
-                    values = [
-                        info.get("Mode", ""),
-                        info.get("Date", ""),
-                        info.get("Fournisseur", ""),
-                        info.get("Payement", ""),
-                        info.get("Adresse", ""),
-                        info.get("Transport", ""),
-                        info.get("Numéro", "")
-                    ]
-                elif isinstance(info, (list, tuple)):
-                    values = list(info)
-                else:
-                    values = [str(info)] + [""] * 6
-                    
-                info_table.insert("", "end", values=values)
-                print(f"DEBUG - Info commande insérée: {values}")
-
+        # === CHARGEMENT DU TABLEAU INFOS COMMANDE - REMOVED ===
+        # Info commande is now displayed in the main grid, no separate table needed
+        
         # === CHARGEMENT DU TABLEAU INFOS GENERALES (Statut, Remarque, Utilisateur) ===
         if hasattr(detail_frame, 'infos_generales_table'):
             infos_table = detail_frame.infos_generales_table
@@ -134,7 +122,15 @@ class CommandeController:
         """Ajoute une nouvelle commande"""
         ref = self.view.ref_entry.get().strip()
         date_reception = self.view.date_reception_entry.get().strip() or datetime.now().strftime("%Y-%m-%d")
-        fournisseur = ""
+        mode = self.view.mode_entry.get().strip()
+        fournisseur = self.view.fournisseur_combo.get().strip()
+        payement = self.view.payement_entry.get().strip()
+        transport = self.view.transport_entry.get().strip()
+        adresse = self.view.adresse_entry.get().strip()
+        numero = self.view.numero_entry.get().strip()
+        statut = self.view.statut_entry.get().strip() or "Créé"
+        remarque = self.view.remarque_entry.get().strip()
+        utilisateur = self.view.utilisateur_entry.get().strip()
 
         if not ref:
             messagebox.showwarning("Champs manquants", "Veuillez saisir la référence.")
@@ -149,9 +145,21 @@ class CommandeController:
             "date_reception": date_reception,
             "fournisseur": fournisseur,
             "produits": [],
-            "infos_commande": [],
-            "detail_commande": [],
-            "statut": "Créé"
+            "infos_commande": [{
+                "statut": statut,
+                "remarque": remarque,
+                "utilisateur": utilisateur
+            }],
+            "infos_commande_detail": [{
+                "mode": mode,
+                "date": date_reception,
+                "fournisseur": fournisseur,
+                "payement": payement,
+                "adresse": adresse,
+                "transport": transport,
+                "numero": numero
+            }],
+            "statut": statut
         }
         self.model.add_commande(cmd)
         self.refresh_tree()
@@ -168,15 +176,46 @@ class CommandeController:
         item = selected[0]
         old_ref = self.view.tree.item(item, "values")[0]
         
-        new_cmd = {
-            "ref": self.view.ref_entry.get().strip(),
-            "date_reception": self.view.date_reception_entry.get().strip(),
-            "fournisseur": self.view.fournisseur_combo.get().strip()
-        }
+        ref = self.view.ref_entry.get().strip()
+        date_reception = self.view.date_reception_entry.get().strip()
+        mode = self.view.mode_entry.get().strip()
+        fournisseur = self.view.fournisseur_combo.get().strip()
+        payement = self.view.payement_entry.get().strip()
+        transport = self.view.transport_entry.get().strip()
+        adresse = self.view.adresse_entry.get().strip()
+        numero = self.view.numero_entry.get().strip()
+        statut = self.view.statut_entry.get().strip()
+        remarque = self.view.remarque_entry.get().strip()
+        utilisateur = self.view.utilisateur_entry.get().strip()
         
-        if not new_cmd["ref"]:
+        if not ref:
             messagebox.showwarning("Champs manquants", "Référence obligatoire.")
             return
+        
+        # Get existing command to preserve produits
+        old_cmd = self.model.get_commande(old_ref)
+        
+        new_cmd = {
+            "ref": ref,
+            "date_reception": date_reception,
+            "fournisseur": fournisseur,
+            "produits": old_cmd.get("produits", []) if old_cmd else [],
+            "infos_commande": [{
+                "statut": statut,
+                "remarque": remarque,
+                "utilisateur": utilisateur
+            }],
+            "infos_commande_detail": [{
+                "mode": mode,
+                "date": date_reception,
+                "fournisseur": fournisseur,
+                "payement": payement,
+                "adresse": adresse,
+                "transport": transport,
+                "numero": numero
+            }],
+            "statut": statut
+        }
             
         self.model.update_commande(old_ref, new_cmd)
         self.refresh_tree()
@@ -203,8 +242,25 @@ class CommandeController:
         self.view.ref_entry.delete(0, "end")
         self.view.date_reception_entry.delete(0, "end")
         self.view.date_reception_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
+        
+        if hasattr(self.view, 'mode_entry'):
+            self.view.mode_entry.delete(0, "end")
         if hasattr(self.view, 'fournisseur_combo'):
             self.view.fournisseur_combo.set("")
+        if hasattr(self.view, 'payement_entry'):
+            self.view.payement_entry.delete(0, "end")
+        if hasattr(self.view, 'transport_entry'):
+            self.view.transport_entry.delete(0, "end")
+        if hasattr(self.view, 'adresse_entry'):
+            self.view.adresse_entry.delete(0, "end")
+        if hasattr(self.view, 'numero_entry'):
+            self.view.numero_entry.delete(0, "end")
+        if hasattr(self.view, 'statut_entry'):
+            self.view.statut_entry.delete(0, "end")
+        if hasattr(self.view, 'remarque_entry'):
+            self.view.remarque_entry.delete(0, "end")
+        if hasattr(self.view, 'utilisateur_entry'):
+            self.view.utilisateur_entry.delete(0, "end")
 
     # === GESTION DES PRODUITS ===
     def add_product_row(self, ref, product_data):

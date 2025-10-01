@@ -11,6 +11,7 @@ def insert_fournisseurs():
         {"Nom": "Fournisseur B", "Téléphone": "0987654321", "Email": "b@demo.com", "Date création": datetime.datetime.now().strftime("%Y-%m-%d")}
     ]
     db.fournisseurs.insert_many(fournisseurs)
+    print(f"✓ {len(fournisseurs)} fournisseurs insérés avec succès")
 def insert_articles():
     db.articles.delete_many({})
     articles = [
@@ -20,25 +21,7 @@ def insert_articles():
         {"code": "ADD1", "designation": "Additif 1", "type": "additif", "quantite": 50, "fournisseur": "Fournisseur B"},
     ]
     db.articles.insert_many(articles)
-
-def make_produit(code, designation, dem, quantite_commande, quantite_reel, prix_uni, tva):
-    prix_uni = float(prix_uni)
-    tva = float(tva)
-    prix_ttc = round(prix_uni * (1 + tva / 100), 2)
-    montant = round(quantite_commande * prix_ttc, 2)
-    montant_reel = round(quantite_reel * prix_ttc, 2)
-    return {
-        "code": code,
-        "designation": designation,
-        "dem": dem,
-        "quantite_commande": quantite_commande,
-        "quantite_reel": quantite_reel,
-        "prix_uni": prix_uni,
-        "tva": tva,
-        "prix_ttc": prix_ttc,
-        "montant": montant,
-        "montant_reel": montant_reel
-    }
+    print(f"✓ {len(articles)} articles insérés avec succès")
 
 def insert_commandes():
     db.commandes.delete_many({})
@@ -46,40 +29,56 @@ def insert_commandes():
         {
             "ref": "CMD001",
             "date_reception": datetime.datetime.now().strftime("%Y-%m-%d"),
+            "fournisseur": "Fournisseur A",
+            "statut": "Validée",
             "produits": [
-                {**make_produit("MPA", "Matière A", "DEM001", 100, 100, 10, 20), "optim_formule": "1", "recette_formule": "R001"},
-                {**make_produit("MPA", "Matière A", "DEM002", 50, 50, 11, 20), "optim_formule": "1", "recette_formule": "R001"},
-                {**make_produit("MPA", "Matière A", "DEM003", 30, 30, 12, 20), "optim_formule": "1", "recette_formule": "R001"},
+                {"Code": "MPA", "DESIGNATION ARTICLE": "Matière A", "DEM": "DEM001", "QUANTITE": 100, "QUANTITE REEL": 100, "Prix UNI.": 10, "TVA": 20, "Prix TTC": 12.0, "MONTANT": 1200.0, "MONTANT REEL": 1200.0, "optim_formule": "1", "recette_formule": "R001"},
+                {"Code": "MPA", "DESIGNATION ARTICLE": "Matière A", "DEM": "DEM002", "QUANTITE": 50, "QUANTITE REEL": 50, "Prix UNI.": 11, "TVA": 20, "Prix TTC": 13.2, "MONTANT": 660.0, "MONTANT REEL": 660.0, "optim_formule": "1", "recette_formule": "R001"},
+                {"Code": "MPA", "DESIGNATION ARTICLE": "Matière A", "DEM": "DEM003", "QUANTITE": 30, "QUANTITE REEL": 30, "Prix UNI.": 12, "TVA": 20, "Prix TTC": 14.4, "MONTANT": 432.0, "MONTANT REEL": 432.0, "optim_formule": "1", "recette_formule": "R001"},
             ],
             "infos_commande": [
                 {"statut": "Validée", "remarque": "Livraison rapide", "utilisateur": "admin"}
             ],
             "infos_commande_detail": [
                 {"mode": "Express", "date": datetime.datetime.now().strftime("%Y-%m-%d"), "fournisseur": "Fournisseur A", "payement": "CB", "adresse": "1 rue Alpha", "transport": "Camion", "numero": "BR001"}
-            ],
-            "statut": "Créé",
-            "fournisseur": "Fournisseur A"
+            ]
         },
         {
             "ref": "CMD002",
             "date_reception": datetime.datetime.now().strftime("%Y-%m-%d"),
+            "fournisseur": "Fournisseur B",
+            "statut": "En attente",
             "produits": [
-                {**make_produit("MPB", "Matière B", "DEM004", 200, 200, 12, 20), "optim_formule": "1", "recette_formule": "R002"},
-                {**make_produit("MPB", "Matière B", "DEM005", 80, 80, 13, 20), "optim_formule": "1", "recette_formule": "R002"},
-                {**make_produit("MPC", "Matière C", "DEM006", 150, 150, 8, 10), "optim_formule": "1", "recette_formule": "R002"},
-                {**make_produit("ADD1", "Additif 1", "DEM007", 50, 50, 5, 10), "optim_formule": "1", "recette_formule": "R002"},
+                {"Code": "MPB", "DESIGNATION ARTICLE": "Matière B", "DEM": "DEM004", "QUANTITE": 200, "QUANTITE REEL": 200, "Prix UNI.": 12, "TVA": 20, "Prix TTC": 14.4, "MONTANT": 2880.0, "MONTANT REEL": 2880.0, "optim_formule": "1", "recette_formule": "R002"},
+                {"Code": "MPB", "DESIGNATION ARTICLE": "Matière B", "DEM": "DEM005", "QUANTITE": 80, "QUANTITE REEL": 80, "Prix UNI.": 13, "TVA": 20, "Prix TTC": 15.6, "MONTANT": 1248.0, "MONTANT REEL": 1248.0, "optim_formule": "1", "recette_formule": "R002"},
+                {"Code": "MPC", "DESIGNATION ARTICLE": "Matière C", "DEM": "DEM006", "QUANTITE": 150, "QUANTITE REEL": 150, "Prix UNI.": 8, "TVA": 10, "Prix TTC": 8.8, "MONTANT": 1320.0, "MONTANT REEL": 1320.0, "optim_formule": "1", "recette_formule": "R002"},
+                {"Code": "ADD1", "DESIGNATION ARTICLE": "Additif 1", "DEM": "DEM007", "QUANTITE": 50, "QUANTITE REEL": 50, "Prix UNI.": 5, "TVA": 10, "Prix TTC": 5.5, "MONTANT": 275.0, "MONTANT REEL": 275.0, "optim_formule": "1", "recette_formule": "R002"},
             ],
             "infos_commande": [
                 {"statut": "En attente", "remarque": "Paiement à la livraison", "utilisateur": "user1"}
             ],
             "infos_commande_detail": [
                 {"mode": "Standard", "date": datetime.datetime.now().strftime("%Y-%m-%d"), "fournisseur": "Fournisseur B", "payement": "Virement", "adresse": "2 rue Beta", "transport": "Train", "numero": "BR002"}
-            ],
+            ]
+        },
+        {
+            "ref": "CMD003",
+            "date_reception": datetime.datetime.now().strftime("%Y-%m-%d"),
+            "fournisseur": "Fournisseur A",
             "statut": "Créé",
-            "fournisseur": "Fournisseur B"
+            "produits": [
+                {"Code": "MPC", "DESIGNATION ARTICLE": "Matière C", "DEM": "DEM008", "QUANTITE": 75, "QUANTITE REEL": 75, "Prix UNI.": 9, "TVA": 10, "Prix TTC": 9.9, "MONTANT": 742.5, "MONTANT REEL": 742.5, "optim_formule": "1", "recette_formule": "R003"},
+            ],
+            "infos_commande": [
+                {"statut": "Créé", "remarque": "Commande urgente", "utilisateur": "admin"}
+            ],
+            "infos_commande_detail": [
+                {"mode": "Urgent", "date": datetime.datetime.now().strftime("%Y-%m-%d"), "fournisseur": "Fournisseur A", "payement": "Espèces", "adresse": "3 rue Gamma", "transport": "Express", "numero": "BR003"}
+            ]
         }
     ]
     db.commandes.insert_many(commandes)
+    print(f"✓ {len(commandes)} commandes insérées avec succès")
     # Les commandes servent uniquement à la traçabilité, pas de modification du stock ici
 
 def insert_formules():
@@ -146,6 +145,8 @@ def insert_formules():
                     updated = True
         if updated:
             db.formules.update_one({"_id": formule["_id"]}, {"$set": {"composantes": formule["composantes"]}})
+    
+    print(f"✓ 3 formules insérées avec succès")
 
 def insert_fabrications():
     fab_premix1 = Fabrication.creer_fabrication(
@@ -243,24 +244,27 @@ def insert_fabrications():
     fab_prod['prix_total_fabrication'] = prix_total_fab_prod
 
 def insert_demo_data():
-
+    print("\n" + "="*60)
+    print("INSERTION DES DONNÉES DE DÉMONSTRATION")
+    print("="*60 + "\n")
     
+    print("Nettoyage des collections...")
     db.fournisseurs.delete_many({})
     db.articles.delete_many({}) 
     db.commandes.delete_many({})
     db.formules.delete_many({})
     db.fabrications.delete_many({})
-    #insert_formules()
-    #insert_fabrications()
+    print("✓ Collections nettoyées\n")
     
+    print("Insertion des données...")
     insert_fournisseurs()
     insert_articles()
     insert_commandes()
     insert_formules()
-    print("Données de démonstration insérées avec succès.")
-
-
+    
+    print("\n" + "="*60)
+    print("✓ TOUTES LES DONNÉES ONT ÉTÉ INSÉRÉES AVEC SUCCÈS")
+    print("="*60 + "\n")
 
 if __name__ == "__main__":
-    insert_demo_data()
     insert_demo_data()

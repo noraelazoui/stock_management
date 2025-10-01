@@ -72,56 +72,120 @@ class CommandeView(ttk.Frame):
             self.notebook.bind("<Button-1>", self.on_tab_click)
 
     def create_widgets(self):
-        # Formulaire principal
-        form_frame = ttk.LabelFrame(self, text="Commande", padding=10)
+        # Formulaire principal - Compact layout in 2 rows
+        form_frame = ttk.LabelFrame(self, text="Commande", padding=5)
         form_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        form_row = ttk.Frame(form_frame)
-        form_row.pack(fill=tk.X, padx=2, pady=2)
+        # First row - All main fields
+        form_row1 = ttk.Frame(form_frame)
+        form_row1.pack(fill=tk.X, padx=2, pady=2)
 
-        ttk.Label(form_row, text="Référence :", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=2)
-        self.ref_entry = ttk.Entry(form_row, width=15)
+        ttk.Label(form_row1, text="Réf:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(0,2))
+        self.ref_entry = ttk.Entry(form_row1, width=12)
         self.ref_entry.pack(side=tk.LEFT, padx=2)
 
-        ttk.Label(form_row, text="Date réception :", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=2)
+        ttk.Label(form_row1, text="Date:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
         from tkcalendar import DateEntry
-        self.date_reception_entry = DateEntry(form_row, width=15, date_pattern='y-mm-dd')
+        self.date_reception_entry = DateEntry(form_row1, width=12, date_pattern='y-mm-dd')
         self.date_reception_entry.pack(side=tk.LEFT, padx=2)
 
+        ttk.Label(form_row1, text="Mode:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.mode_entry = ttk.Entry(form_row1, width=12)
+        self.mode_entry.pack(side=tk.LEFT, padx=2)
 
-        # Boutons
-        self.add_btn = ttk.Button(form_row, text="Ajouter", width=15)
+        ttk.Label(form_row1, text="Fournisseur:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.fournisseur_combo = AutocompleteCombobox(form_row1, width=15)
+        self.fournisseur_combo.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(form_row1, text="Paiement:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.payement_entry = ttk.Entry(form_row1, width=12)
+        self.payement_entry.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(form_row1, text="Transport:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.transport_entry = ttk.Entry(form_row1, width=12)
+        self.transport_entry.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(form_row1, text="Adresse:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.adresse_entry = ttk.Entry(form_row1, width=20)
+        self.adresse_entry.pack(side=tk.LEFT, padx=2)
+
+        # Second row - Additional fields and buttons
+        form_row2 = ttk.Frame(form_frame)
+        form_row2.pack(fill=tk.X, padx=2, pady=2)
+
+        ttk.Label(form_row2, text="N° BR:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(0,2))
+        self.numero_entry = ttk.Entry(form_row2, width=12)
+        self.numero_entry.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(form_row2, text="Statut:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.statut_entry = ttk.Entry(form_row2, width=12)
+        self.statut_entry.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(form_row2, text="Remarque:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.remarque_entry = ttk.Entry(form_row2, width=30)
+        self.remarque_entry.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(form_row2, text="Utilisateur:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT, padx=(5,2))
+        self.utilisateur_entry = ttk.Entry(form_row2, width=12)
+        self.utilisateur_entry.pack(side=tk.LEFT, padx=2)
+
+        # Buttons in the same row
+        ttk.Separator(form_row2, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        
+        btn_row = form_row2  # Use same row for buttons
+
+        self.add_btn = ttk.Button(btn_row, text="Ajouter", width=15)
         self.add_btn.pack(side=tk.LEFT, padx=2)
-        self.modify_btn = ttk.Button(form_row, text="Modifier", width=15)
+        self.modify_btn = ttk.Button(btn_row, text="Modifier", width=15)
         self.modify_btn.pack(side=tk.LEFT, padx=2)
-        self.delete_btn = ttk.Button(form_row, text="Supprimer", width=15)
+        self.delete_btn = ttk.Button(btn_row, text="Supprimer", width=15)
         self.delete_btn.pack(side=tk.LEFT, padx=2)
-        self.reset_btn = ttk.Button(form_row, text="Réinitialiser", width=15)
+        self.reset_btn = ttk.Button(btn_row, text="Réinitialiser", width=15)
         self.reset_btn.pack(side=tk.LEFT, padx=2)
 
-        # Tableau des commandes
+        # Tableau des commandes - Expanded columns
         table_frame = ttk.LabelFrame(self, text="Liste des commandes", padding=10)
         table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        columns = ("ref", "date_reception", "detail")
+        columns = ("ref", "date_reception", "mode", "fournisseur", "payement", "transport", "adresse", "numero", "statut", "remarque", "utilisateur", "detail")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
         
         # Style pour les en-têtes plus foncés
         style = ttk.Style()
         style.configure("Treeview.Heading", font=('TkDefaultFont', 9, 'bold'), background='#4a4a4a', foreground='white')
         
-        for col, text in zip(columns, ["Référence", "Date réception", "Détail"]):
+        column_headers = ["Référence", "Date réception", "Mode", "Fournisseur", "Paiement", "Transport", "Adresse", "Numéro BR", "Statut", "Remarque", "Utilisateur", "Détail"]
+        for col, text in zip(columns, column_headers):
             self.tree.heading(col, text=text)
+        
+        # Set column widths
         self.tree.column("ref", width=100)
-        self.tree.column("date_reception", width=120)
+        self.tree.column("date_reception", width=100)
+        self.tree.column("mode", width=80)
+        self.tree.column("fournisseur", width=120)
+        self.tree.column("payement", width=80)
+        self.tree.column("transport", width=80)
+        self.tree.column("adresse", width=150)
+        self.tree.column("numero", width=100)
+        self.tree.column("statut", width=80)
+        self.tree.column("remarque", width=150)
+        self.tree.column("utilisateur", width=100)
         self.tree.column("detail", width=80, anchor="center")
         
-        # Scrollbar verticale
+        # Scrollbars
         tree_vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=tree_vsb.set)
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tree_vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        tree_hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=tree_vsb.set, xscrollcommand=tree_hsb.set)
+        
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        tree_vsb.grid(row=0, column=1, sticky="ns")
+        tree_hsb.grid(row=1, column=0, sticky="ew")
+        
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+        
         self.tree.bind("<Double-1>", self.open_detail_tab)
+        self.tree.bind("<ButtonRelease-1>", self.on_tree_select)
 
         # Notebook pour onglets détail
         self.notebook = ttk.Notebook(self)
@@ -149,6 +213,10 @@ class CommandeView(ttk.Frame):
                     fournisseur_list.append(nom)
             
             self.fournisseurs = fournisseur_list
+            
+            # Update the main combobox if it exists
+            if hasattr(self, "fournisseur_combo") and self.fournisseur_combo.winfo_exists():
+                self.fournisseur_combo.set_values(self.fournisseurs)
         except Exception as e:
             self.fournisseurs = []
 
@@ -156,6 +224,49 @@ class CommandeView(ttk.Frame):
         """Rafraîchit l'arbre principal (appelé depuis le contrôleur)"""
         if self.controller:
             self.controller.refresh_tree()
+
+    def on_tree_select(self, event):
+        """Called when a row is selected in the tree"""
+        selected = self.tree.selection()
+        if not selected:
+            return
+        
+        item = selected[0]
+        values = self.tree.item(item, "values")
+        
+        # Fill the form fields with selected row data
+        self.ref_entry.delete(0, tk.END)
+        self.ref_entry.insert(0, values[0])
+        
+        self.date_reception_entry.set_date(values[1] if values[1] else datetime.now())
+        
+        self.mode_entry.delete(0, tk.END)
+        self.mode_entry.insert(0, values[2])
+        
+        self.fournisseur_combo.set(values[3])
+        
+        self.payement_entry.delete(0, tk.END)
+        self.payement_entry.insert(0, values[4])
+        
+        self.transport_entry.delete(0, tk.END)
+        self.transport_entry.insert(0, values[5])
+        
+        self.adresse_entry.delete(0, tk.END)
+        self.adresse_entry.insert(0, values[6])
+        
+        self.numero_entry.delete(0, tk.END)
+        self.numero_entry.insert(0, values[7])
+        
+        self.statut_entry.delete(0, tk.END)
+        self.statut_entry.insert(0, values[8])
+        
+        self.remarque_entry.delete(0, tk.END)
+        self.remarque_entry.insert(0, values[9])
+        
+        self.utilisateur_entry.delete(0, tk.END)
+        self.utilisateur_entry.insert(0, values[10])
+
+    # Removed _create_info_commande_section - no longer needed as info is in main grid
 
     def open_detail_tab(self, event):
         """Ouvre l'onglet détail pour une commande sélectionnée"""
@@ -165,7 +276,8 @@ class CommandeView(ttk.Frame):
             
         item = selected[0]
         region = self.tree.identify_column(event.x)
-        if region != "#3":  # Vérifier qu'on a cliqué sur la colonne "Détail"
+        # Check if clicked on "Détail" column (now column #12 with the expanded structure)
+        if region != "#12":
             return
             
         ref = self.tree.item(item, "values")[0]
@@ -194,9 +306,6 @@ class CommandeView(ttk.Frame):
                               font=("Helvetica", 12, "bold"), fg="#2a9f5d", bg="#eafbf1")
         titre_label.pack(side=tk.TOP, fill=tk.X, pady=2)
 
-        # === SECTION INFOS COMMANDE (Mode, Date, Fournisseur, etc.) ===
-        self._create_info_commande_section(detail_frame, ref)
-        
         # === SECTION PRODUITS ===
         self._create_produits_section(detail_frame, ref)
         
@@ -495,6 +604,24 @@ class CommandeView(ttk.Frame):
                         if hasattr(entry, 'delete'):
                             entry.delete(0, tk.END)
 
+        def load_product_to_form():
+            """Load selected product into form fields for editing"""
+            selected = product_tree.selection()
+            if not selected:
+                messagebox.showwarning("Sélection", "Sélectionnez une ligne à charger.")
+                return
+                
+            item = selected[0]
+            values = product_tree.item(item, "values")
+            
+            # Fill the form with selected product data
+            for i, field in enumerate(prod_fields):
+                if field in prod_form_entries:
+                    entry = prod_form_entries[field]
+                    if hasattr(entry, 'delete'):
+                        entry.delete(0, tk.END)
+                        entry.insert(0, values[i] if i < len(values) else "")
+        
         def modify_product_row():
             selected = product_tree.selection()
             if not selected:
@@ -546,6 +673,9 @@ class CommandeView(ttk.Frame):
                         if self.controller.delete_product_row(ref, old_row):
                             product_tree.delete(item)
 
+        # Bind double-click to load product into form
+        product_tree.bind("<Double-1>", lambda e: load_product_to_form())
+        
         # Placer les boutons à côté du champ TVA dans le formulaire produit
         # Chercher l'index du champ TVA
         tva_index = None
@@ -555,9 +685,10 @@ class CommandeView(ttk.Frame):
                 break
         if tva_index is not None:
             btn_col = tva_index + 1
-            ttk.Button(prod_form_frame, text="Ajouter ligne", command=insert_product_row, width=13).grid(row=1, column=btn_col, padx=1)
-            ttk.Button(prod_form_frame, text="Modifier ligne", command=modify_product_row, width=13).grid(row=1, column=btn_col+1, padx=1)
-            ttk.Button(prod_form_frame, text="Supprimer ligne", command=delete_product_row, width=13).grid(row=1, column=btn_col+2, padx=1)
+            ttk.Button(prod_form_frame, text="Charger", command=load_product_to_form, width=12).grid(row=1, column=btn_col, padx=1)
+            ttk.Button(prod_form_frame, text="Ajouter", command=insert_product_row, width=12).grid(row=1, column=btn_col+1, padx=1)
+            ttk.Button(prod_form_frame, text="Modifier", command=modify_product_row, width=12).grid(row=1, column=btn_col+2, padx=1)
+            ttk.Button(prod_form_frame, text="Supprimer", command=delete_product_row, width=12).grid(row=1, column=btn_col+3, padx=1)
 
     def _create_infos_generales_section(self, detail_frame, ref):
         """Crée la section Infos générales commande (infos_commande)"""

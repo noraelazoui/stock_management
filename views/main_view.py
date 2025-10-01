@@ -5,7 +5,29 @@ class GestionApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Application de Gestion")
-        self.geometry("1000x700")
+        
+        # Get screen dimensions
+        self.update_idletasks()
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        # Set window to maximized but keep window decorations and taskbar visible
+        # Leave some space for taskbar (typically 40-50px)
+        taskbar_height = 50
+        window_height = screen_height - taskbar_height
+        self.geometry(f"{screen_width}x{window_height}+0+0")
+        
+        # Allow window resizing
+        self.resizable(True, True)
+        
+        # Try to maximize window (platform specific) - this keeps taskbar visible
+        try:
+            self.state('zoomed')  # For Windows and some Linux systems
+        except:
+            pass  # Use geometry setting above as fallback
+        
+        # Add close button functionality
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Liste partagée des articles
         self.articles = []
@@ -51,6 +73,14 @@ class GestionApp(tk.Tk):
 
         # Synchronisation FormuleView <-> Articles
         self.formule_view = None
+
+    # -------------------------
+    # Window Control
+    # -------------------------
+    def on_closing(self):
+        """Handle window close button click"""
+        if messagebox.askokcancel("Quitter", "Voulez-vous vraiment quitter l'application ?"):
+            self.destroy()
 
     # -------------------------
     # Menu
