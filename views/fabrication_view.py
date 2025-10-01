@@ -139,15 +139,19 @@ class FabricationView(tk.Frame):
         lot_entry.pack(side=tk.LEFT)
         self.entries["Lot"] = lot_entry
 
-        # Création des boutons à côté du champ Lot
-        self.btn_ajouter = ttk.Button(lot_container, text="Ajouter", command=self.ajouter)
-        self.btn_modifier = ttk.Button(lot_container, text="Modifier", command=self.modifier)
-        self.btn_supprimer = ttk.Button(lot_container, text="Supprimer", command=self.supprimer)
-        self.btn_valider = ttk.Button(lot_container, text="Valider", command=self.valider)
-        self.btn_ajouter.pack(side=tk.LEFT, padx=2)
-        self.btn_modifier.pack(side=tk.LEFT, padx=2)
-        self.btn_supprimer.pack(side=tk.LEFT, padx=2)
-        self.btn_valider.pack(side=tk.LEFT, padx=2)
+        # Création d'une nouvelle ligne pour les boutons (plus responsive)
+        button_frame = ttk.Frame(self.info_labelframe)
+        button_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        # Création des boutons dans leur propre frame
+        self.btn_ajouter = ttk.Button(button_frame, text="Ajouter", command=self.ajouter, width=15)
+        self.btn_modifier = ttk.Button(button_frame, text="Modifier", command=self.modifier, width=15)
+        self.btn_supprimer = ttk.Button(button_frame, text="Supprimer", command=self.supprimer, width=15)
+        self.btn_valider = ttk.Button(button_frame, text="Valider", command=self.valider, width=15)
+        self.btn_ajouter.pack(side=tk.LEFT, padx=5)
+        self.btn_modifier.pack(side=tk.LEFT, padx=5)
+        self.btn_supprimer.pack(side=tk.LEFT, padx=5)
+        self.btn_valider.pack(side=tk.LEFT, padx=5)
 
         # Garder une référence aux articles disponibles
         self.articles_disponibles = []
@@ -458,17 +462,17 @@ class FabricationView(tk.Frame):
                 entry.pack(side=tk.LEFT)
                 self.detail_entries[field] = entry
 
-            # Les boutons sont maintenant placés à côté du champ Recette
-
-            # Placer les boutons à côté du champ Recette
-            for field in self.input_fields:
-                if field == "Recette":
-                    btn_ajouter = ttk.Button(field_frame, text="Ajouter", command=self.ajouter_detail, width=12)
-                    btn_modifier = ttk.Button(field_frame, text="Modifier", command=self.modifier_detail, width=12, state='disabled')
-                    btn_supprimer = ttk.Button(field_frame, text="Supprimer", command=self.supprimer_detail, width=12)
-                    btn_ajouter.pack(side=tk.LEFT, padx=2)
-                    btn_modifier.pack(side=tk.LEFT, padx=2)
-                    btn_supprimer.pack(side=tk.LEFT, padx=2)
+            # Créer une nouvelle ligne pour les boutons de détail (plus responsive)
+            detail_button_frame = ttk.Frame(detail_frame)
+            detail_button_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
+            
+            # Placer les boutons dans leur propre frame
+            btn_ajouter = ttk.Button(detail_button_frame, text="Ajouter", command=self.ajouter_detail, width=15)
+            btn_modifier = ttk.Button(detail_button_frame, text="Modifier", command=self.modifier_detail, width=15, state='disabled')
+            btn_supprimer = ttk.Button(detail_button_frame, text="Supprimer", command=self.supprimer_detail, width=15)
+            btn_ajouter.pack(side=tk.LEFT, padx=5)
+            btn_modifier.pack(side=tk.LEFT, padx=5)
+            btn_supprimer.pack(side=tk.LEFT, padx=5)
 
 
             # Cadre avec titre pour le tableau de détail fabrication
