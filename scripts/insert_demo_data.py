@@ -88,6 +88,7 @@ def insert_formules():
     db.formules.insert_one({
         "code": "PREMIX1",
         "type": "formule",
+        "type_formule": "simple",  # Pour Premix - contient uniquement des matières/additifs
         "optim": "1",
         "recette_code": "R001",
         "recette_formule": "R001",  # Ajout
@@ -103,6 +104,7 @@ def insert_formules():
     db.formules.insert_one({
         "code": "PREMIX2",
         "type": "formule",
+        "type_formule": "simple",  # Pour Premix - contient uniquement des matières/additifs
         "optim": "1",
         "recette_code": "R002",
         "recette_formule": "R002",  # Ajout
@@ -118,6 +120,7 @@ def insert_formules():
     db.formules.insert_one({
         "code": "PRODFIN1",
         "type": "formule",
+        "type_formule": "mixte",  # Pour Usine - contient des formules
         "optim": "1",
         "recette_code": "R003",
         "designation": "Produit Fini 1",
