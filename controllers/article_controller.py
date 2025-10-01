@@ -1,4 +1,5 @@
 from models.article import ArticleModel
+from models.schemas import ArticleSchema as Schema
 from views.article_view import ArticleView
 from tkinter import messagebox
 import tkinter as tk
@@ -6,7 +7,7 @@ import tkinter as tk
 class ArticleController:
     def get_article_by_code_and_unit(self, code, unit):
         # Cherche l'article avec le code et l'unité
-        articles = self.model.collection.find({"code": code, "unite": unit})
+        articles = self.model.collection.find({Schema.CODE: code, Schema.UNIT: unit})
         for art in articles:
             return {k: v for k, v in art.items() if k != "_id"}
         return None
@@ -17,11 +18,11 @@ class ArticleController:
 
     def add_article(self):
         art = {
-            "code": self.view.code_entry.get(),
-            "designation": self.view.designation_entry.get(),
-            "type": self.view.type_combo.get()
+            Schema.CODE: self.view.code_entry.get(),
+            Schema.DESIGNATION: self.view.designation_entry.get(),
+            Schema.TYPE: self.view.type_combo.get()
         }
-        if not art["code"] or not art["designation"]:
+        if not art[Schema.CODE] or not art[Schema.DESIGNATION]:
             messagebox.showwarning("Champs manquants","Veuillez remplir tous les champs.")
             return
         if self.model.add_article(art):

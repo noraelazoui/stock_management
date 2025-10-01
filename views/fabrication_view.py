@@ -197,19 +197,27 @@ class FabricationView(tk.Frame):
         # Variable pour suivre si la fenêtre de détails est ouverte
         self.detail_window_open = False
         
+        # Configure color tags for the tree
+        self.tree.tag_configure('complete', background='#d4edda', foreground='#155724')  # Green
+        self.tree.tag_configure('incomplete', background='#f8d7da', foreground='#721c24')  # Red
+        
         # Lier l'événement de double-clic sur le tableau
-
-
         self.tree.bind('<Double-Button-1>', self.on_tree_double_click)
+        
+        # Lier l'événement de sélection simple pour peupler le formulaire
+        self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+        
         # Remplir le tableau avec les fabrications depuis MongoDB
         self.populate_fabrications_table()
 
     def populate_fabrications_table(self):
         """
         Remplit le tableau principal avec les fabrications depuis MongoDB.
+        Color codes rows: green if formule is 100% complete, red otherwise.
         """
         try:
             from models.database import db
+            from models.formule import Formule
             fabrications = list(db.fabrications.find())
             for fab in fabrications:
                 # Use schema constants with backward compatibility
@@ -221,13 +229,66 @@ class FabricationView(tk.Frame):
                 date_fabrication = get_field_value(fab, Schema.PRODUCTION_DATE, "date_fabrication")
                 lot = get_field_value(fab, Schema.LOT, "lot")
                 prix_formule = get_field_value(fab, Schema.FORMULA_PRICE, "prix_formule")
+                
+                # Check if the formule is complete (100%)
+                tag = 'incomplete'  # Default to red
+                try:
+                    formule = Formule.get_by_code_optim(code, optim)
+                    if formule and formule.valider():
+                        tag = 'complete'  # Green if 100%
+                except Exception as e:
+                    print(f"Error checking formule validation for {code}-{optim}: {e}")
+                
                 # La colonne Détail sert à ouvrir la vue détail
                 self.tree.insert('', 'end', values=(
                     code, optim, recette, nb_composantes, quantite_a_fabriquer,
                     date_fabrication, lot, prix_formule, "Détail"
-                ))
+                ), tags=(tag,))
         except Exception as e:
             print(f"Erreur lors du remplissage du tableau des fabrications: {str(e)}")
+    def on_tree_select(self, event):
+        """Peuple le formulaire quand une ligne est sélectionnée"""
+        try:
+            selected = self.tree.selection()
+            if not selected:
+                return
+            
+            item = selected[0]
+            values = self.tree.item(item)['values']
+            
+            # Peupler les champs du formulaire avec les valeurs de la ligne sélectionnée
+            if len(values) >= 7:
+                # Code et Optim (combobox)
+                self.code_combo.set(values[0])
+                self.optim_combo.set(values[1])
+                
+                # Recette
+                self.entries["Recette"].delete(0, tk.END)
+                self.entries["Recette"].insert(0, str(values[2]))
+                
+                # NBcomposante
+                self.entries["NBcomposante"].delete(0, tk.END)
+                self.entries["NBcomposante"].insert(0, str(values[3]))
+                
+                # Quantité à fabriquer
+                self.entries["Quantité à fabriquer"].delete(0, tk.END)
+                self.entries["Quantité à fabriquer"].insert(0, str(values[4]))
+                
+                # Date Fabrication
+                self.entries["Date Fabrication"].delete(0, tk.END)
+                self.entries["Date Fabrication"].insert(0, str(values[5]))
+                
+                # Lot
+                self.entries["Lot"].delete(0, tk.END)
+                self.entries["Lot"].insert(0, str(values[6]))
+                
+                print(f"[DEBUG] Formulaire peuplé avec les valeurs de la ligne sélectionnée (Lot: {values[6]})")
+                
+        except Exception as e:
+            print(f"Erreur lors de la sélection de la ligne: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
     def on_tree_double_click(self, event):
         try:
             print("[DEBUG] Double-clic détecté sur le tableau.")
@@ -403,7 +464,7 @@ class FabricationView(tk.Frame):
             for field in self.input_fields:
                 if field == "Recette":
                     btn_ajouter = ttk.Button(field_frame, text="Ajouter", command=self.ajouter_detail, width=12)
-                    btn_modifier = ttk.Button(field_frame, text="Modifier", command=self.modifier_detail, width=12)
+                    btn_modifier = ttk.Button(field_frame, text="Modifier", command=self.modifier_detail, width=12, state='disabled')
                     btn_supprimer = ttk.Button(field_frame, text="Supprimer", command=self.supprimer_detail, width=12)
                     btn_ajouter.pack(side=tk.LEFT, padx=2)
                     btn_modifier.pack(side=tk.LEFT, padx=2)
@@ -640,6 +701,7 @@ class FabricationView(tk.Frame):
             nb_composantes = self.entries["NBcomposante"].get()
             quantite_a_fabriquer = self.entries["Quantité à fabriquer"].get()
             date_fabrication = self.entries["Date Fabrication"].get()
+            lot = self.entries["Lot"].get()  # Récupérer le lot
 
             from models.fabrication import Fabrication
 
@@ -648,7 +710,8 @@ class FabricationView(tk.Frame):
                 "recette_code": recette,
                 "nb_composantes": nb_composantes,
                 "quantite_a_fabriquer": quantite_a_fabriquer,
-                "date_fabrication": date_fabrication
+                "date_fabrication": date_fabrication,
+                "lot": lot  # Inclure le lot dans la mise à jour
             }
             
             Fabrication.modifier_fabrication(code, optim, nouvelles_donnees)
@@ -656,7 +719,7 @@ class FabricationView(tk.Frame):
             # Mettre à jour la vue tableau
             self.tree.item(selection[0], values=(
                 code, optim, recette, nb_composantes, quantite_a_fabriquer,
-                date_fabrication, "", "", "Détail"  # Lot et Prix de Formule vides
+                date_fabrication, lot, "", "Détail"  # Afficher le lot correctement
             ))
 
             print("Fabrication modifiée avec succès")
@@ -953,39 +1016,18 @@ class FabricationView(tk.Frame):
             print(f"Erreur lors de l'ajout: {str(e)}")
 
     def modifier_detail(self):
-        try:
-            # Vérifier qu'une ligne est sélectionnée
-            selection = self.detail_tree.selection()
-            if not selection:
-                print("Veuillez sélectionner une ligne à modifier")
-                return
-
-            # Récupérer l'article depuis la ligne sélectionnée
-            current_values = self.detail_tree.item(selection[0])['values']
-            article_selectionne = current_values[0]  # Article est la première colonne
-
-            # Récupérer les valeurs dans l'ordre des colonnes
-            valeurs = []
-            for field in self.fields:
-                if field == "Article":
-                    valeurs.append(article_selectionne)  # Garder l'article existant
-                else:
-                    valeurs.append(self.detail_entries[field].get())
-
-            # Mettre à jour la ligne sélectionnée
-            self.detail_tree.item(selection[0], values=valeurs)
-
-            # Vider les champs sauf Article qui n'existe plus
-            for field, entry in self.detail_entries.items():
-                if hasattr(entry, 'delete'):
-                    entry.delete(0, tk.END)
-                elif hasattr(entry, 'set'):
-                    entry.set('')
-
-            # Sauvegarder automatiquement après modification
-            self.enregistrer_details_fabrication()
-        except Exception as e:
-            print(f"Erreur lors de la modification: {str(e)}")
+        """
+        Modification des détails de fabrication est désactivée.
+        Les lignes ne peuvent pas être modifiées une fois ajoutées.
+        """
+        from tkinter import messagebox
+        messagebox.showwarning(
+            "Modification non autorisée", 
+            "Les détails de fabrication ne peuvent pas être modifiés.\n\n"
+            "Utilisez 'Supprimer' puis 'Ajouter' pour corriger une erreur."
+        )
+        print("Tentative de modification bloquée - Les détails ne peuvent pas être modifiés")
+        return
 
     def supprimer_detail(self):
         try:
@@ -1130,20 +1172,25 @@ class FabricationView(tk.Frame):
                     print(f"[DEBUG] Produits list: {produits}")
                     for produit in produits:
                         print(f"[DEBUG] Inspecting produit: {produit}")
-                        if produit.get("DEM"):
-                            print(f"[DEBUG] Produit has DEM: {produit['DEM']}")
-                            dem_values.add(produit["DEM"])
+                        # Check both uppercase and lowercase 'dem' field
+                        dem = produit.get("DEM") or produit.get("dem")
+                        if dem:
+                            print(f"[DEBUG] Produit has DEM: {dem}")
+                            dem_values.add(dem)
                     dem_values = sorted(list(dem_values))
                     print(f"[DEBUG] DEM values found for article {article_code}: {dem_values}")
                     dem_combobox = self.detail_entries["DEM"]
                     if dem_values:
                         dem_combobox["values"] = dem_values
                         dem_combobox.set(dem_values[0])
+                        # Trigger the DEM selected event to populate Prix and Quantité
+                        self.on_dem_selected(None)
                     else:
                         dem_combobox["values"] = []
                         dem_combobox.set("")
-                    prix = article.get("prix", "")
-                    quantite = article.get("quantite", "")
+                    # Get price and quantity from article (check multiple field name variations)
+                    prix = article.get("prix") or article.get("price") or ""
+                    quantite = article.get("quantite") or article.get("quantity") or ""
                     if "Prix" in self.detail_entries:
                         self.detail_entries["Prix"].delete(0, tk.END)
                         self.detail_entries["Prix"].insert(0, prix)
@@ -1155,12 +1202,7 @@ class FabricationView(tk.Frame):
                     if "Pourcentage" in self.detail_entries:
                         self.detail_entries["Pourcentage"].delete(0, tk.END)
                         self.detail_entries["Pourcentage"].insert(0, f"{pourcentage:.2f}")
-                    # Vider DEM
-                    if "DEM" in self.detail_entries:
-                        self.detail_entries["DEM"].set("")
-                    if "Pourcentage" in self.detail_entries:
-                        self.detail_entries["Pourcentage"].delete(0, tk.END)
-                        self.detail_entries["Pourcentage"].insert(0, f"{pourcentage:.2f}")
+                    # DEM is already populated above, no need to clear it
         except Exception as e:
             print(f"Erreur lors de la sélection de l'article: {str(e)}")
             import traceback
@@ -1313,23 +1355,35 @@ class FabricationView(tk.Frame):
             # Import de la base
             from models.database import db
 
-            # Rechercher directement le produit par son DEM dans la base
-            article = db.articles.find_one({"produits.DEM": selected_dem}, {
-                "produits.$": 1  # Projection pour récupérer uniquement le produit correspondant
-            })
+            # Rechercher directement le produit par son DEM dans la base (check both uppercase and lowercase)
+            article = db.articles.find_one({"$or": [
+                {"produits.DEM": selected_dem},
+                {"produits.dem": selected_dem}
+            ]})
 
             if article and "produits" in article:
-                produit = article["produits"][0]  # Le produit correspondant au DEM
+                # Find the specific product with the matching DEM
+                produit = None
+                for p in article.get("produits", []):
+                    if p.get("DEM") == selected_dem or p.get("dem") == selected_dem:
+                        produit = p
+                        break
+                
+                if produit:
+                    # Mise à jour des champs Prix et Quantité (check both uppercase and lowercase field names)
+                    prix = produit.get("Prix") or produit.get("prix") or produit.get("price") or 0
+                    quantite = produit.get("Quantité") or produit.get("quantité") or produit.get("quantite") or produit.get("quantity") or 0
+                    
+                    self.detail_entries["Prix"].delete(0, tk.END)
+                    self.detail_entries["Prix"].insert(0, str(prix))
+                    self.detail_entries["Quantité en stock"].delete(0, tk.END)
+                    self.detail_entries["Quantité en stock"].insert(0, str(quantite))
 
-                # Mise à jour des champs Prix et Quantité
-                self.detail_entries["Prix"].delete(0, tk.END)
-                self.detail_entries["Prix"].insert(0, str(produit.get("Prix", 0)))
-                self.detail_entries["Quantité en stock"].delete(0, tk.END)
-                self.detail_entries["Quantité en stock"].insert(0, str(produit.get("Quantité", 0)))
-
-                print("[INFO] Champs mis à jour avec succès.")
+                    print(f"[INFO] Champs mis à jour avec succès. Prix={prix}, Quantité={quantite}")
+                else:
+                    print(f"[ERREUR] Produit avec DEM '{selected_dem}' non trouvé dans l'article.")
             else:
-                print(f"[ERREUR] Aucun produit trouvé pour le DEM '{selected_dem}'.")
+                print(f"[ERREUR] Aucun article trouvé contenant le DEM '{selected_dem}'.")
 
         except Exception as e:
             import traceback

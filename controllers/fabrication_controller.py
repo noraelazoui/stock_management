@@ -1,6 +1,7 @@
 from models.fabrication import Fabrication
 from models.formule import FormuleManager
 from models.database import db
+from models.schemas import FabricationSchema as Schema, FormuleSchema, get_field_value
 
 class FabricationController:
     def __init__(self):
@@ -33,16 +34,20 @@ class FabricationController:
         Récupère le pourcentage associé à un article dans une formule spécifique
         """
         # Récupérer la formule
-        formule = db.formules.find_one({"code": code_formule, "optim": optim_formule})
+        formule = db.formules.find_one({
+            FormuleSchema.CODE: code_formule, 
+            FormuleSchema.OPTIM: optim_formule
+        })
         if not formule:
             return 0
         
         # Parcourir les composantes pour trouver l'article
-        for comp in formule.get("composantes", []):
-            article_name = comp.get("article", "")
+        C = FormuleSchema.Component
+        for comp in get_field_value(formule, [FormuleSchema.COMPONENTS, "composantes"], []):
+            article_name = get_field_value(comp, [C.ARTICLE, "article"], "")
             # Vérifier si le code de l'article correspond
             if article_name.startswith(code_article):
-                return float(comp.get("pourcentage", 0))
+                return float(get_field_value(comp, [C.PERCENTAGE, "pourcentage"], 0))
         
         return 0
     
@@ -50,8 +55,11 @@ class FabricationController:
         """
         Récupère toutes les composantes d'une formule avec leurs pourcentages
         """
-        formule = db.formules.find_one({"code": code_formule, "optim": optim_formule})
+        formule = db.formules.find_one({
+            FormuleSchema.CODE: code_formule, 
+            FormuleSchema.OPTIM: optim_formule
+        })
         if not formule:
             return []
             
-        return formule.get("composantes", [])
+        return get_field_value(formule, [FormuleSchema.COMPONENTS, "composantes"], [])

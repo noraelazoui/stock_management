@@ -1,5 +1,6 @@
 from datetime import datetime
 from tkinter import messagebox
+from models.schemas import CommandeSchema as Schema, get_field_value
 
 class CommandeController:
     def __init__(self, model, view):
@@ -24,23 +25,24 @@ class CommandeController:
         """Rafraîchit l'arbre principal des commandes"""
         self.view.tree.delete(*self.view.tree.get_children())
         for c in self.model.commandes:
-            if "ref" in c:
+            ref = get_field_value(c, [Schema.REF, "ref"])
+            if ref:
                 # Get first info from infos_commande_detail if exists
-                info_detail = c.get("infos_commande_detail", [{}])[0] if c.get("infos_commande_detail") else {}
-                infos_gen = c.get("infos_commande", [{}])[0] if c.get("infos_commande") else {}
+                info_detail = c.get(Schema.ORDER_DETAIL, c.get("infos_commande_detail", [{}]))[0] if c.get(Schema.ORDER_DETAIL, c.get("infos_commande_detail")) else {}
+                infos_gen = c.get(Schema.ORDER_INFO, c.get("infos_commande", [{}]))[0] if c.get(Schema.ORDER_INFO, c.get("infos_commande")) else {}
                 
                 self.view.tree.insert("", "end", values=(
-                    c.get("ref", ""), 
-                    c.get("date_reception", ""),
-                    info_detail.get("mode", ""),
-                    info_detail.get("fournisseur", c.get("fournisseur", "")),
-                    info_detail.get("payement", ""),
-                    info_detail.get("transport", ""),
-                    info_detail.get("adresse", ""),
-                    info_detail.get("numero", ""),
-                    infos_gen.get("statut", c.get("statut", "")),
-                    infos_gen.get("remarque", ""),
-                    infos_gen.get("utilisateur", ""),
+                    ref, 
+                    get_field_value(c, [Schema.RECEPTION_DATE, "date_reception"], ""),
+                    get_field_value(info_detail, [Schema.OrderDetail.MODE, "mode"], ""),
+                    get_field_value(info_detail, [Schema.OrderDetail.SUPPLIER, "fournisseur"], get_field_value(c, ["fournisseur"], "")),
+                    get_field_value(info_detail, [Schema.OrderDetail.PAYMENT, "payement"], ""),
+                    get_field_value(info_detail, [Schema.OrderDetail.TRANSPORT, "transport"], ""),
+                    get_field_value(info_detail, [Schema.OrderDetail.ADDRESS, "adresse"], ""),
+                    get_field_value(info_detail, [Schema.OrderDetail.NUMBER, "numero"], ""),
+                    get_field_value(infos_gen, [Schema.OrderInfo.STATUS, "statut"], get_field_value(c, ["statut"], "")),
+                    get_field_value(infos_gen, [Schema.OrderInfo.REMARK, "remarque"], ""),
+                    get_field_value(infos_gen, [Schema.OrderInfo.USER, "utilisateur"], ""),
                     "Détail"
                 ))
 
@@ -64,23 +66,24 @@ class CommandeController:
             tree = detail_frame.product_tree
             tree.delete(*tree.get_children())
             
-            produits = commande.get("produits", [])
+            produits = get_field_value(commande, [Schema.PRODUCTS, "produits"], [])
             print(f"DEBUG - Produits à charger: {produits}")
             
             for produit in produits:
                 if isinstance(produit, dict):
+                    P = Schema.Product
                     # Assurer l'ordre des colonnes
                     values = [
-                        produit.get("Code", ""),
-                        produit.get("DESIGNATION ARTICLE", ""),
-                        produit.get("DEM", ""),
-                        produit.get("QUANTITE", ""),
-                        produit.get("QUANTITE REEL", ""),
-                        produit.get("Prix UNI.", ""),
-                        produit.get("TVA", ""),
-                        produit.get("Prix TTC", ""),
-                        produit.get("MONTANT", ""),
-                        produit.get("MONTANT REEL", "")
+                        get_field_value(produit, [P.CODE, "Code"], ""),
+                        get_field_value(produit, [P.DESIGNATION, "DESIGNATION ARTICLE"], ""),
+                        get_field_value(produit, [P.DEM, "DEM"], ""),
+                        get_field_value(produit, [P.QUANTITY, "QUANTITE"], ""),
+                        get_field_value(produit, [P.REAL_QUANTITY, "QUANTITE REEL"], ""),
+                        get_field_value(produit, [P.UNIT_PRICE, "Prix UNI."], ""),
+                        get_field_value(produit, [P.VAT, "TVA"], ""),
+                        get_field_value(produit, [P.PRICE_WITH_VAT, "Prix TTC"], ""),
+                        get_field_value(produit, [P.AMOUNT, "MONTANT"], ""),
+                        get_field_value(produit, [P.REAL_AMOUNT, "MONTANT REEL"], "")
                     ]
                 elif isinstance(produit, (list, tuple)):
                     values = list(produit)
@@ -99,15 +102,16 @@ class CommandeController:
             infos_table.delete(*infos_table.get_children())
             
             # Utiliser le champ 'infos_commande' pour les infos générales
-            infos_commande = commande.get("infos_commande", [])
+            infos_commande = get_field_value(commande, [Schema.ORDER_INFO, "infos_commande"], [])
             print(f"DEBUG - infos_commande à charger: {infos_commande}")
             
             for info in infos_commande:
                 if isinstance(info, dict):
+                    I = Schema.OrderInfo
                     values = [
-                        info.get("Statut", ""),
-                        info.get("Remarque", ""),
-                        info.get("Utilisateur", "")
+                        get_field_value(info, [I.STATUS, "Statut"], ""),
+                        get_field_value(info, [I.REMARK, "Remarque"], ""),
+                        get_field_value(info, [I.USER, "Utilisateur"], "")
                     ]
                 elif isinstance(info, (list, tuple)):
                     values = list(info)
@@ -141,25 +145,25 @@ class CommandeController:
             return
 
         cmd = {
-            "ref": ref,
-            "date_reception": date_reception,
-            "fournisseur": fournisseur,
-            "produits": [],
-            "infos_commande": [{
-                "statut": statut,
-                "remarque": remarque,
-                "utilisateur": utilisateur
+            Schema.REF: ref,
+            Schema.RECEPTION_DATE: date_reception,
+            Schema.SUPPLIER: fournisseur,
+            Schema.PRODUCTS: [],
+            Schema.ORDER_INFO: [{
+                Schema.OrderInfo.STATUS: statut,
+                Schema.OrderInfo.REMARK: remarque,
+                Schema.OrderInfo.USER: utilisateur
             }],
-            "infos_commande_detail": [{
-                "mode": mode,
-                "date": date_reception,
-                "fournisseur": fournisseur,
-                "payement": payement,
-                "adresse": adresse,
-                "transport": transport,
-                "numero": numero
+            Schema.ORDER_DETAIL: [{
+                Schema.OrderDetail.MODE: mode,
+                Schema.OrderDetail.DATE: date_reception,
+                Schema.OrderDetail.SUPPLIER: fournisseur,
+                Schema.OrderDetail.PAYMENT: payement,
+                Schema.OrderDetail.ADDRESS: adresse,
+                Schema.OrderDetail.TRANSPORT: transport,
+                Schema.OrderDetail.NUMBER: numero
             }],
-            "statut": statut
+            "statut": statut  # Keep backward compatibility
         }
         self.model.add_commande(cmd)
         self.refresh_tree()
@@ -196,25 +200,25 @@ class CommandeController:
         old_cmd = self.model.get_commande(old_ref)
         
         new_cmd = {
-            "ref": ref,
-            "date_reception": date_reception,
-            "fournisseur": fournisseur,
-            "produits": old_cmd.get("produits", []) if old_cmd else [],
-            "infos_commande": [{
-                "statut": statut,
-                "remarque": remarque,
-                "utilisateur": utilisateur
+            Schema.REF: ref,
+            Schema.RECEPTION_DATE: date_reception,
+            Schema.SUPPLIER: fournisseur,
+            Schema.PRODUCTS: get_field_value(old_cmd, [Schema.PRODUCTS, "produits"], []) if old_cmd else [],
+            Schema.ORDER_INFO: [{
+                Schema.OrderInfo.STATUS: statut,
+                Schema.OrderInfo.REMARK: remarque,
+                Schema.OrderInfo.USER: utilisateur
             }],
-            "infos_commande_detail": [{
-                "mode": mode,
-                "date": date_reception,
-                "fournisseur": fournisseur,
-                "payement": payement,
-                "adresse": adresse,
-                "transport": transport,
-                "numero": numero
+            Schema.ORDER_DETAIL: [{
+                Schema.OrderDetail.MODE: mode,
+                Schema.OrderDetail.DATE: date_reception,
+                Schema.OrderDetail.SUPPLIER: fournisseur,
+                Schema.OrderDetail.PAYMENT: payement,
+                Schema.OrderDetail.ADDRESS: adresse,
+                Schema.OrderDetail.TRANSPORT: transport,
+                Schema.OrderDetail.NUMBER: numero
             }],
-            "statut": statut
+            "statut": statut  # Keep backward compatibility
         }
             
         self.model.update_commande(old_ref, new_cmd)
@@ -308,12 +312,14 @@ class CommandeController:
         """Met à jour l'article correspondant au produit"""
         try:
             from models.article import ArticleModel
+            from models.schemas import ArticleSchema as ArtSchema
             
+            P = Schema.Product
             if isinstance(product_data, dict):
-                code_article = product_data.get("Code")
-                prix_ttc = product_data.get("Prix TTC")
-                dem = product_data.get("DEM")
-                quantite_reel = product_data.get("QUANTITE REEL")
+                code_article = get_field_value(product_data, [P.CODE, "Code"])
+                prix_ttc = get_field_value(product_data, [P.PRICE_WITH_VAT, "Prix TTC"])
+                dem = get_field_value(product_data, [P.DEM, "DEM"])
+                quantite_reel = get_field_value(product_data, [P.REAL_QUANTITY, "QUANTITE REEL"])
             else:
                 # Si c'est une liste
                 code_article = product_data[0] if len(product_data) > 0 else None
@@ -323,11 +329,11 @@ class CommandeController:
 
             update_data = {}
             if prix_ttc is not None and prix_ttc != "":
-                update_data["prix"] = prix_ttc
+                update_data[ArtSchema.Product.PRICE] = prix_ttc
             if dem is not None and dem != "":
-                update_data["dem"] = dem
+                update_data[ArtSchema.Product.DEM] = dem
             if quantite_reel is not None and quantite_reel != "":
-                update_data["quantite"] = quantite_reel
+                update_data[ArtSchema.Product.QUANTITY] = quantite_reel
 
             if code_article and update_data:
                 ArticleModel().modify_article(code_article, update_data)

@@ -1,4 +1,5 @@
 from models.formule import Formule, Composante
+from models.schemas import FormuleSchema as Schema
 
 class FormuleController:
     def lister_formules_par_type(self):

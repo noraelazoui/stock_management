@@ -29,12 +29,14 @@ class FormuleManager:
         """
         Check if the given component code corresponds to a formula.
         """
-        formule = db.formules.find_one({"code": component_code})
+        from models.schemas import FormuleSchema as Schema
+        formule = db.formules.find_one({Schema.CODE: component_code})
         return formule is not None
 
 import sys, os
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/..'))
 from models.database import db
+from models.schemas import FormuleSchema as Schema, get_field_value
 
 class Composante:
     def __init__(self, article, pourcentage, optim_formule=None, recette_formule=None):

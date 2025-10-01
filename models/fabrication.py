@@ -1,5 +1,6 @@
 from datetime import datetime
 from models.database import db
+from models.schemas import FabricationSchema as Schema, FormuleSchema as FSchema, ArticleSchema as ASchema, get_field_value
 import uuid
 
 class Fabrication:
@@ -231,6 +232,43 @@ class Fabrication:
         for fabrication in fabrications:
             print(fabrication)
         return fabrications
+
+    @staticmethod
+    def modifier_fabrication(code, optim, nouvelles_donnees):
+        """
+        Modifie une fabrication existante avec les nouvelles données fournies.
+        
+        Args:
+            code: Le code de la fabrication
+            optim: L'optimisation de la fabrication
+            nouvelles_donnees: Un dictionnaire contenant les champs à mettre à jour
+        """
+        try:
+            # Vérifier si la fabrication existe
+            fabrication = db.fabrications.find_one({"code": code, "optim": optim})
+            if not fabrication:
+                print(f"[DEBUG] Aucune fabrication trouvée pour code={code}, optim={optim}")
+                return False
+            
+            # Mettre à jour la fabrication avec les nouvelles données
+            result = db.fabrications.update_one(
+                {"code": code, "optim": optim},
+                {"$set": nouvelles_donnees}
+            )
+            
+            if result.modified_count > 0:
+                print(f"[DEBUG] Fabrication modifiée : code={code}, optim={optim}")
+                print(f"[DEBUG] Nouvelles données : {nouvelles_donnees}")
+                return True
+            else:
+                print(f"[DEBUG] Aucune modification effectuée pour code={code}, optim={optim}")
+                return False
+                
+        except Exception as e:
+            print(f"[DEBUG] Erreur lors de la modification de la fabrication : {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     @staticmethod
     def supprimer_fabrication(code, optim):

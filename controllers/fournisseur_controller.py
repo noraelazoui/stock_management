@@ -1,3 +1,5 @@
+from models.schemas import SupplierSchema as Schema
+
 class FournisseurController:
     def __init__(self, model, view):
         self.model = model
@@ -23,7 +25,7 @@ class FournisseurController:
         if not selected:
             self.view.show_message("Sélectionnez un fournisseur à modifier")
             return
-        fournisseur_nom = selected['Nom']
+        fournisseur_nom = selected.get(Schema.NAME, selected.get('Nom'))
         new_data = self.view.get_form_data()
         success, msg = self.model.update(fournisseur_nom, new_data)
         if success:
@@ -37,7 +39,7 @@ class FournisseurController:
         if not selected:
             self.view.show_message("Sélectionnez un fournisseur à supprimer")
             return
-        fournisseur_nom = selected['Nom']
+        fournisseur_nom = selected.get(Schema.NAME, selected.get('Nom'))
         success, msg = self.model.delete(fournisseur_nom)
         if success:
             self.view.delete_from_tree(fournisseur_nom)

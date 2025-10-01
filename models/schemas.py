@@ -261,26 +261,53 @@ class SupplierSchema:
 
 
 # Helper functions for backward compatibility
-def get_field_value(obj, *field_names):
+def get_field_value(obj, *args, **kwargs):
     """
     Get field value trying multiple field names (case-insensitive fallback).
     Tries exact match first, then case-insensitive search.
     
+    Args:
+        obj: Dictionary object to search
+        *args: Field names to try, or a list of field names, optionally followed by default value
+        **kwargs: Optional 'default' keyword argument
+    
     Usage:
-        price = get_field_value(product, ArticleSchema.Product.PRICE, "Prix", "price")
+        price = get_field_value(product, Schema.PRICE, "Prix", "price", default=0)
+        # OR
+        price = get_field_value(product, [Schema.PRICE, "Prix"], default=0)
+        # OR
+        price = get_field_value(product, [Schema.PRICE, "Prix"], 0)  # positional default
     """
+    # Extract default value (can be positional or keyword)
+    default = kwargs.get('default', None)
+    field_names = args
+    
+    # Handle: get_field_value(obj, [list], default)
+    if len(args) >= 2 and isinstance(args[0], (list, tuple)) and not isinstance(args[1], (list, tuple)):
+        field_names = args[0]
+        default = args[1] if len(args) > 1 else default
+    # Handle: get_field_value(obj, [list])
+    elif len(args) == 1 and isinstance(args[0], (list, tuple)):
+        field_names = args[0]
+    # Handle: get_field_value(obj, field1, field2, ...)
+    # field_names is already set to args
+    
     for field_name in field_names:
+        if isinstance(field_name, (list, tuple)):
+            continue  # Skip if somehow a list got in
         if field_name in obj:
             return obj[field_name]
     
     # Case-insensitive fallback
     for field_name in field_names:
-        field_lower = field_name.lower()
+        if isinstance(field_name, (list, tuple)):
+            continue
+        field_lower = str(field_name).lower()
         for key in obj.keys():
-            if key.lower() == field_lower:
+            if str(key).lower() == field_lower:
                 return obj[key]
     
-    return None
+    return default
 
 
 def normalize_to_schema(obj, schema_mapping):
