@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime
 from models.formule import Formule, Composante
 from controllers.formule_controller import FormuleController
+from models.schemas import FormuleSchema as Schema, get_field_value
 
 
 class FormuleView(ttk.Frame):
@@ -608,16 +609,20 @@ class FormuleView(ttk.Frame):
         """Met à jour le combobox articles avec groupes simulés et recherche dynamique"""
         if hasattr(self, 'compo_article_combo'):
             from models.database import db
+            from models.schemas import CommandeSchema as CSchema
             # Aggregate all DEM/product lines for all articles from commandes
             all_commandes = list(db.commandes.find({}))
             seen = set()
             values = []
+            P = CSchema.Product
             for cmd in all_commandes:
-                for prod in cmd.get('produits', []):
-                    code = prod.get('code', '')
-                    if code and code not in seen:
-                        values.append(code)
-                        seen.add(code)
+                produits = get_field_value(cmd, CSchema.PRODUCTS, 'produits', 'products')
+                if isinstance(produits, list):
+                    for prod in produits:
+                        code = get_field_value(prod, P.CODE, 'code', 'Code')
+                        if code and code not in seen:
+                            values.append(code)
+                            seen.add(code)
             values.sort()
             self.compo_article_combo['values'] = values
             self.compo_article_combo.set("")

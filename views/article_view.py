@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
+from models.schemas import ArticleSchema as Schema
 
 
 class ArticleView(ttk.Frame):
@@ -199,24 +200,29 @@ class ArticleView(ttk.Frame):
         linked_table_frame.grid_rowconfigure(0, weight=1)
         linked_table_frame.grid_columnconfigure(0, weight=1)
 
-        # Afficher tous les produits (lignes DEM) liés à cet article depuis toutes les commandes
+        # Afficher tous les produits directement depuis l'article using schema
         from models.database import db
-        all_commandes = list(db.commandes.find({}))
+        from models.schemas import get_field_value
+        
+        # Récupérer les produits depuis l'article lui-même
         dem_products = []
-        for cmd in all_commandes:
-            for prod in cmd.get("produits", []):
-                if prod.get("code") == article.get("code"):
-                    # Adapter les champs pour la grid
-                    dem_products.append({
-                        "Prix": prod.get("prix_uni", prod.get("Prix", "")),
-                        "Quantité": prod.get("quantite_commande", prod.get("Quantité", "")),
-                        "DEM": prod.get("dem", prod.get("DEM", "")),
-                        "Batch": cmd.get("ref", ""),
-                        "Date fabrication": cmd.get("date_reception", ""),
-                        "Date expiration": "",
-                        "Alerte": "",
-                        "Seuil": ""
-                    })
+        article_code = article.get(Schema.CODE) or article.get("code")  # Backward compatibility
+        article_from_db = db.articles.find_one({Schema.CODE: article_code})
+        
+        if article_from_db and "produits" in article_from_db:
+            P = Schema.Product  # Shorthand
+            for prod in article_from_db.get("produits", []):
+                # Use get_field_value for backward compatibility with old field names
+                dem_products.append({
+                    "Prix": get_field_value(prod, P.PRICE, "Prix", "price"),
+                    "Quantité": get_field_value(prod, P.QUANTITY, "Quantité", "quantite", "quantity"),
+                    "DEM": get_field_value(prod, P.DEM, "DEM", "dem"),
+                    "Batch": get_field_value(prod, P.BATCH, "Batch", "batch"),
+                    "Date fabrication": get_field_value(prod, P.MANUFACTURING_DATE, "Date fabrication", "manufacturing_date"),
+                    "Date expiration": get_field_value(prod, P.EXPIRATION_DATE, "Date expiration", "expiration_date"),
+                    "Alerte": get_field_value(prod, P.ALERT_MONTHS, "Alerte", "alert_months"),
+                    "Seuil": get_field_value(prod, P.THRESHOLD, "Seuil", "threshold")
+                })
         self.detail_products = dem_products
         self.linked_product_tree.delete(*self.linked_product_tree.get_children())
         for prod in self.detail_products:

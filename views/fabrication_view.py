@@ -4,6 +4,7 @@ from tkinter import ttk
 from datetime import datetime
 from models.formule import FormuleManager
 from tkcalendar import DateEntry
+from models.schemas import FabricationSchema as Schema, get_field_value
 class FabricationView(tk.Frame):
     def __init__(self, master=None):
         # Frame de détails courant (pour éviter les doublons)
@@ -211,14 +212,15 @@ class FabricationView(tk.Frame):
             from models.database import db
             fabrications = list(db.fabrications.find())
             for fab in fabrications:
-                code = fab.get("code", "")
-                optim = fab.get("optim", "")
-                recette = fab.get("recette_code", "")
-                nb_composantes = fab.get("nb_composantes", "")
-                quantite_a_fabriquer = fab.get("quantite_a_fabriquer", "")
-                date_fabrication = fab.get("date_fabrication", "")
-                lot = fab.get("lot", "")
-                prix_formule = fab.get("prix_formule", "")
+                # Use schema constants with backward compatibility
+                code = get_field_value(fab, Schema.CODE, "code")
+                optim = get_field_value(fab, Schema.OPTIM, "optim")
+                recette = get_field_value(fab, Schema.RECIPE_CODE, "recette_code", "recette")
+                nb_composantes = get_field_value(fab, Schema.COMPONENTS_COUNT, "nb_composantes")
+                quantite_a_fabriquer = get_field_value(fab, Schema.QUANTITY_TO_PRODUCE, "quantite_a_fabriquer")
+                date_fabrication = get_field_value(fab, Schema.PRODUCTION_DATE, "date_fabrication")
+                lot = get_field_value(fab, Schema.LOT, "lot")
+                prix_formule = get_field_value(fab, Schema.FORMULA_PRICE, "prix_formule")
                 # La colonne Détail sert à ouvrir la vue détail
                 self.tree.insert('', 'end', values=(
                     code, optim, recette, nb_composantes, quantite_a_fabriquer,

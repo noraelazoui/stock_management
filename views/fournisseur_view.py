@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
+from models.schemas import SupplierSchema as Schema, get_field_value
 
 class FournisseurView(ttk.Frame):
     def __init__(self, parent):
@@ -128,10 +129,11 @@ class FournisseurView(ttk.Frame):
             self.tree.delete(item)
         # Ajoute chaque fournisseur au début du DataGrid (première ligne), uniquement si au moins un champ est rempli
         for fournisseur in self.fournisseur_model.fournisseurs:
-            if any(fournisseur.get(key, "").strip() for key in ["Nom", "Téléphone", "Email", "Date création"]):
-                self.tree.insert("", 0, values=(
-                    fournisseur.get("Nom", ""),
-                    fournisseur.get("Téléphone", ""),
-                    fournisseur.get("Email", ""),
-                    fournisseur.get("Date création", "")
-                ))
+            # Use schema constants with backward compatibility
+            nom = get_field_value(fournisseur, Schema.NAME, "Nom", "nom")
+            telephone = get_field_value(fournisseur, Schema.PHONE, "Téléphone", "telephone")
+            email = get_field_value(fournisseur, Schema.EMAIL, "Email", "email")
+            date_creation = get_field_value(fournisseur, Schema.CREATION_DATE, "Date création", "date_creation")
+            
+            if any([nom.strip(), telephone.strip(), email.strip(), date_creation.strip()]):
+                self.tree.insert("", 0, values=(nom, telephone, email, date_creation))

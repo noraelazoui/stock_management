@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
+from models.schemas import CommandeSchema as Schema, get_field_value
 
 class AutocompleteCombobox(ttk.Combobox):
     def __init__(self, master=None, **kwargs):
@@ -199,15 +200,15 @@ class CommandeView(ttk.Frame):
         """Charge les fournisseurs depuis la base de données au démarrage"""
         try:
             from models.database import db
+            from models.schemas import SupplierSchema as SSchema
             fournisseurs_db = list(db.fournisseurs.find({}, {"_id": 0}))
             fournisseur_list = []
             
             print(f"DEBUG: Fournisseurs trouvés dans MongoDB: {fournisseurs_db}")
             
             for f in fournisseurs_db:
-                nom = (f.get("nom", "") or f.get("Nom", "") or 
-                       f.get("name", "") or f.get("Name", "") or
-                       f.get("ID", "") or f.get("id", "")).strip()
+                # Use schema with backward compatibility
+                nom = get_field_value(f, SSchema.NAME, "Nom", "nom", "name", "Name", "ID", "id")
                 
                 if nom:
                     fournisseur_list.append(nom)
@@ -449,16 +450,18 @@ class CommandeView(ttk.Frame):
         # Charger les articles depuis MongoDB
         try:
             from models.database import db
-            articles_db = list(db.articles.find({}, {"_id": 0, "code": 1, "designation": 1, "type": 1}))
+            from models.schemas import ArticleSchema as ASchema
+            articles_db = list(db.articles.find({}, {"_id": 0}))
             
             mp_codes = []
             add_codes = []
             code_to_designation = {}
             
             for article in articles_db:
-                code = article.get("code", "").strip()
-                designation = article.get("designation", "").strip()
-                type_art = article.get("type", "").strip().lower()
+                # Use schema constants with backward compatibility
+                code = get_field_value(article, ASchema.CODE, "code", "Code").strip()
+                designation = get_field_value(article, ASchema.DESIGNATION, "designation", "Designation").strip()
+                type_art = get_field_value(article, ASchema.TYPE, "type", "Type").strip().lower()
                 
                 if not code:
                     continue
