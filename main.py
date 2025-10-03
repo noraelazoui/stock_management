@@ -1,4 +1,8 @@
 import sys
+# Configure matplotlib backend BEFORE any other imports
+import matplotlib
+matplotlib.use('TkAgg')
+
 # ...existing code...
 
 from views.main_view import GestionApp

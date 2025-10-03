@@ -1,0 +1,8 @@
+Stock Management Application License
+
+Copyright (c) 2025 Your Company
+
+This software is provided for use by authorized clients only.
+All rights reserved.
+
+For support and updates, contact: support@yourcompany.com

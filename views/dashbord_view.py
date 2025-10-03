@@ -4,6 +4,9 @@ from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
 from tkcalendar import DateEntry
 
+# Configure matplotlib backend before importing pyplot
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -26,14 +29,16 @@ class StockView(tk.Frame):
 
 
 
-        # Nouveaux onglets : Stock Article, Stock Fabrication et Inventaire de stock
+        # Nouveaux onglets : Stock Article, Stock Fabrication, Inventaire de stock et Alertes
         self.tab_stock_article = ttk.Frame(self.notebook)
         self.tab_stock_fabrication = ttk.Frame(self.notebook)
         self.tab_inventaire_stock = ttk.Frame(self.notebook)
+        self.tab_alertes = ttk.Frame(self.notebook)
 
         self.notebook.add(self.tab_stock_article, text="Stock Article")
         self.notebook.add(self.tab_stock_fabrication, text="Stock Fabrication")
         self.notebook.add(self.tab_inventaire_stock, text="Inventaire de stock")
+        self.notebook.add(self.tab_alertes, text="⚠️ Alertes Stock")
 
         # Responsive layout uniquement pour les deux onglets principaux
         for tab in [self.tab_stock_article, self.tab_stock_fabrication]:
@@ -57,10 +62,16 @@ class StockView(tk.Frame):
         self.btn_actualiser_inventaire = ttk.Button(self.tab_inventaire_stock, text="Actualiser", command=self.refresh_inventaire_stock)
         self.btn_actualiser_inventaire.pack(anchor="ne", padx=10, pady=8)
 
-        # Chargement des tableaux dans les onglets
-        self.afficher_stock_article()
-        self.afficher_stock_fabrication()
-        self.afficher_inventaire_stock()
+        # Bouton Actualiser pour Alertes
+        self.btn_actualiser_alertes = ttk.Button(self.tab_alertes, text="Actualiser", command=self.refresh_alertes)
+        self.btn_actualiser_alertes.pack(anchor="ne", padx=10, pady=8)
+
+        # Chargement des tableaux dans les onglets - delayed to avoid segfault
+        # Use after_idle() to defer chart creation until window is fully initialized
+        self.after_idle(self.afficher_stock_article)
+        self.after_idle(self.afficher_stock_fabrication)
+        self.after_idle(self.afficher_inventaire_stock)
+        self.after_idle(self.afficher_alertes)
     def setup_fabrication_filters(self):
         """Setup filter frame for Stock Fabrication tab"""
         # Filter frame at the top
@@ -408,6 +419,9 @@ class StockView(tk.Frame):
         self.afficher_stock_fabrication()
 
     def afficher_stock_article(self):
+        # Close any existing matplotlib figures to prevent memory leaks
+        plt.close('all')
+        
         # ...existing code...
         articles = self.controller.get_stock_global()
         noms = []
@@ -475,9 +489,9 @@ class StockView(tk.Frame):
 
         # Rotation des labels si beaucoup d'articles
         if len(noms) > 10:
-            ax.set_xticklabels(noms, rotation=45, ha="right", fontsize=13)
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right", fontsize=13)
         else:
-            ax.set_xticklabels(noms, fontsize=13)
+            plt.setp(ax.xaxis.get_majorticklabels(), fontsize=13)
 
         # Tooltips interactifs
         mplcursors.cursor(bars, hover=True).connect("add", lambda sel: sel.annotation.set_text(f"{noms[sel.index]}: {quantites[sel.index]}") )
@@ -521,6 +535,9 @@ class StockView(tk.Frame):
         """
         Affiche la liste des fabrications dans l'onglet Stock Fabrication avec filtres
         """
+        # Close any existing matplotlib figures to prevent memory leaks
+        plt.close('all')
+        
         # Data container frame
         data_frame = ttk.Frame(self.tab_stock_fabrication)
         data_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -637,9 +654,9 @@ class StockView(tk.Frame):
         fig.tight_layout()
 
         if len(codes) > 10:
-            ax.set_xticklabels(codes, rotation=45, ha="right", fontsize=13)
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right", fontsize=13)
         else:
-            ax.set_xticklabels(codes, fontsize=13)
+            plt.setp(ax.xaxis.get_majorticklabels(), fontsize=13)
 
         mplcursors.cursor(bars, hover=True).connect("add", lambda sel: sel.annotation.set_text(f"{codes[sel.index]}: {quantites[sel.index]}\n{dates[sel.index]}") )
 
@@ -701,5 +718,183 @@ class StockView(tk.Frame):
 
         ttk.Label(stats_frame, text="Lots Uniques:", font=("Arial", 10, "bold")).grid(row=0, column=4, padx=10, pady=5, sticky="w")
         ttk.Label(stats_frame, text=str(len(lot_counts)), font=("Arial", 10)).grid(row=0, column=5, padx=10, pady=5, sticky="w")
+
+    def afficher_alertes(self):
+        """Affiche les alertes de stock bas et d'expiration"""
+        # Clear existing content
+        for widget in self.tab_alertes.winfo_children():
+            if widget != self.btn_actualiser_alertes:
+                widget.destroy()
+
+        # Main container
+        main_frame = ttk.Frame(self.tab_alertes)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Get alerts from controller
+        alertes = self.controller.get_alertes()
+        
+        # Summary frame
+        summary_frame = ttk.LabelFrame(main_frame, text="📊 Résumé des Alertes", padding=10)
+        summary_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        nb_stock_bas = len(alertes['stock_bas'])
+        nb_expiration = len(alertes['expiration'])
+        nb_critique = sum(1 for a in alertes['expiration'] if a['niveau'] in ['EXPIRÉ', 'CRITIQUE'])
+        
+        ttk.Label(summary_frame, text=f"🔴 Stock Bas: {nb_stock_bas} produit(s)", 
+                 font=("Arial", 11, "bold"), foreground="red").grid(row=0, column=0, padx=20, pady=5)
+        ttk.Label(summary_frame, text=f"⏰ Expiration: {nb_expiration} produit(s)", 
+                 font=("Arial", 11, "bold"), foreground="orange").grid(row=0, column=1, padx=20, pady=5)
+        ttk.Label(summary_frame, text=f"⚠️ Critique: {nb_critique} produit(s)", 
+                 font=("Arial", 11, "bold"), foreground="darkred").grid(row=0, column=2, padx=20, pady=5)
+
+        # Create notebook for different alert types
+        alert_notebook = ttk.Notebook(main_frame)
+        alert_notebook.pack(fill=tk.BOTH, expand=True)
+
+        # Stock Bas tab
+        stock_bas_frame = ttk.Frame(alert_notebook)
+        alert_notebook.add(stock_bas_frame, text=f"🔴 Stock Bas ({nb_stock_bas})")
+        
+        # Expiration tab
+        expiration_frame = ttk.Frame(alert_notebook)
+        alert_notebook.add(expiration_frame, text=f"⏰ Expiration ({nb_expiration})")
+
+        # Display Stock Bas alerts
+        self._afficher_alertes_stock_bas(stock_bas_frame, alertes['stock_bas'])
+        
+        # Display Expiration alerts
+        self._afficher_alertes_expiration(expiration_frame, alertes['expiration'])
+
+    def _afficher_alertes_stock_bas(self, parent, alertes):
+        """Affiche les alertes de stock bas"""
+        if not alertes:
+            ttk.Label(parent, text="✅ Aucune alerte de stock bas", 
+                     font=("Arial", 12), foreground="green").pack(pady=20)
+            return
+
+        # Create Treeview
+        columns = ("Article", "Code", "DEM", "Batch", "Quantité", "Seuil", "Niveau")
+        tree = ttk.Treeview(parent, columns=columns, show='headings', height=20)
+        
+        # Configure columns
+        tree.heading("Article", text="Article")
+        tree.heading("Code", text="Code")
+        tree.heading("DEM", text="DEM")
+        tree.heading("Batch", text="Lot/Batch")
+        tree.heading("Quantité", text="Quantité")
+        tree.heading("Seuil", text="Seuil")
+        tree.heading("Niveau", text="Niveau (%)")
+        
+        tree.column("Article", width=200)
+        tree.column("Code", width=80)
+        tree.column("DEM", width=100)
+        tree.column("Batch", width=100)
+        tree.column("Quantité", width=80, anchor='center')
+        tree.column("Seuil", width=80, anchor='center')
+        tree.column("Niveau", width=100, anchor='center')
+
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Configure tags for color coding
+        tree.tag_configure('critique', background='#ffcccc')  # Light red
+        tree.tag_configure('attention', background='#ffe6cc')  # Light orange
+        
+        # Insert data
+        for alerte in alertes:
+            pourcentage = alerte['pourcentage']
+            tag = 'critique' if pourcentage < 50 else 'attention'
+            
+            tree.insert('', 'end', values=(
+                alerte['article'],
+                alerte['code'],
+                alerte['dem'],
+                alerte['batch'],
+                f"{alerte['quantity']:.1f}",
+                f"{alerte['threshold']:.1f}",
+                f"{pourcentage:.1f}%"
+            ), tags=(tag,))
+
+    def _afficher_alertes_expiration(self, parent, alertes):
+        """Affiche les alertes d'expiration"""
+        if not alertes:
+            ttk.Label(parent, text="✅ Aucune alerte d'expiration", 
+                     font=("Arial", 12), foreground="green").pack(pady=20)
+            return
+
+        # Create Treeview
+        columns = ("Article", "Code", "DEM", "Batch", "Date Exp.", "Jours Restants", "Niveau", "Quantité")
+        tree = ttk.Treeview(parent, columns=columns, show='headings', height=20)
+        
+        # Configure columns
+        tree.heading("Article", text="Article")
+        tree.heading("Code", text="Code")
+        tree.heading("DEM", text="DEM")
+        tree.heading("Batch", text="Lot/Batch")
+        tree.heading("Date Exp.", text="Date Expiration")
+        tree.heading("Jours Restants", text="Jours Restants")
+        tree.heading("Niveau", text="Niveau")
+        tree.heading("Quantité", text="Quantité")
+        
+        tree.column("Article", width=180)
+        tree.column("Code", width=80)
+        tree.column("DEM", width=100)
+        tree.column("Batch", width=100)
+        tree.column("Date Exp.", width=100, anchor='center')
+        tree.column("Jours Restants", width=120, anchor='center')
+        tree.column("Niveau", width=100, anchor='center')
+        tree.column("Quantité", width=80, anchor='center')
+
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Configure tags for color coding
+        tree.tag_configure('expire', background='#cc0000', foreground='white')  # Dark red
+        tree.tag_configure('critique', background='#ff4444', foreground='white')  # Red
+        tree.tag_configure('attention', background='#ffaa00')  # Orange
+        tree.tag_configure('avertissement', background='#ffffcc')  # Light yellow
+        
+        # Insert data
+        for alerte in alertes:
+            niveau = alerte['niveau']
+            days = alerte['days_left']
+            
+            # Choose tag based on level
+            if niveau == 'EXPIRÉ':
+                tag = 'expire'
+                days_text = f"EXPIRÉ ({abs(days)} j)"
+            elif niveau == 'CRITIQUE':
+                tag = 'critique'
+                days_text = f"{days} jours"
+            elif niveau == 'ATTENTION':
+                tag = 'attention'
+                days_text = f"{days} jours"
+            else:
+                tag = 'avertissement'
+                days_text = f"{days} jours"
+            
+            tree.insert('', 'end', values=(
+                alerte['article'],
+                alerte['code'],
+                alerte['dem'],
+                alerte['batch'],
+                alerte['exp_date'],
+                days_text,
+                niveau,
+                f"{alerte['quantity']:.1f}"
+            ), tags=(tag,))
+
+    def refresh_alertes(self):
+        """Rafraîchit l'affichage des alertes"""
+        self.afficher_alertes()
 
     

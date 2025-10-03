@@ -1,0 +1,19 @@
+# Deployment packages
+*.zip
+deployment_packages/
+
+# Build artifacts
+build/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# MongoDB
+mongodb/
+
+# Downloads
+downloads/

@@ -1,0 +1,173 @@
+================================================================================
+  STOCK MANAGEMENT - WINDOWS INSTALLER CREATION INSTRUCTIONS
+================================================================================
+
+If CREATE_INSTALLER_ON_WINDOWS.bat says "installer_setup.iss introuvable"
+(not found), follow these MANUAL steps:
+
+--------------------------------------------------------------------------------
+STEP 1: Verify Files
+--------------------------------------------------------------------------------
+
+Make sure you have extracted windows_package.zip and you can see these:
+
+  ✓ installer_setup.iss (file)
+  ✓ dist\StockManagement\ (folder)
+  ✓ mongodb\ (folder)
+  ✓ scripts_installer\ (folder)
+
+If ANY of these are missing, re-extract windows_package.zip!
+
+
+--------------------------------------------------------------------------------
+STEP 2: Install Inno Setup
+--------------------------------------------------------------------------------
+
+1. Go to: https://jrsoftware.org/isdl.php
+
+2. Download: "Inno Setup 6.x" (Unicode version)
+
+3. Run the installer
+
+4. Click: Next → Next → Install → Finish
+
+
+--------------------------------------------------------------------------------
+STEP 3: Create Installer MANUALLY (Easy Way)
+--------------------------------------------------------------------------------
+
+METHOD A: Using Inno Setup GUI (Recommended)
+────────────────────────────────────────────
+
+1. Right-click on "installer_setup.iss"
+
+2. Choose "Compile" (if you see this option)
+   
+   OR
+
+   Choose "Open with" → "Inno Setup Compiler"
+
+3. In Inno Setup window, click "Build" menu → "Compile"
+   (or press F9)
+
+4. Wait 2-3 minutes
+
+5. Done! Check the "installer_output" folder
+
+
+METHOD B: Using Command Line
+────────────────────────────────────────────
+
+1. Open Command Prompt in the extracted folder
+   (Shift + Right-click in folder → "Open PowerShell window here"
+    or "Open command window here")
+
+2. Type this command (all on one line):
+
+   "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer_setup.iss
+
+   OR if installed in Program Files (not x86):
+
+   "C:\Program Files\Inno Setup 6\ISCC.exe" installer_setup.iss
+
+3. Press Enter
+
+4. Wait 2-3 minutes
+
+5. Done! Check the "installer_output" folder
+
+
+--------------------------------------------------------------------------------
+STEP 4: Find Your Installer
+--------------------------------------------------------------------------------
+
+Location: installer_output\StockManagement_Setup_v1.0.0.exe
+
+Size: ~200 MB
+
+This is what you give to your clients!
+
+
+--------------------------------------------------------------------------------
+TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+Problem: "installer_setup.iss introuvable" or "not found"
+Solution: 
+  - Make sure you extracted ALL files from windows_package.zip
+  - Run the command from the SAME folder where installer_setup.iss is located
+  - Don't move files around after extraction
+
+
+Problem: "Inno Setup not found"
+Solution:
+  - Install Inno Setup from https://jrsoftware.org/isdl.php
+  - After installation, restart Command Prompt
+  - Try METHOD A (GUI method) instead
+
+
+Problem: "dist\StockManagement not found"
+Solution:
+  - Re-extract windows_package.zip completely
+  - Don't extract only some files - extract EVERYTHING
+
+
+Problem: Compilation fails with errors
+Solution:
+  - Make sure ALL folders are present:
+    ✓ dist\StockManagement\
+    ✓ mongodb\
+    ✓ scripts_installer\
+  - Check that icon.ico exists
+  - Check that LICENSE.txt exists
+
+
+--------------------------------------------------------------------------------
+QUICK REFERENCE: What Goes Where
+--------------------------------------------------------------------------------
+
+After extraction, your folder should look like this:
+
+YourFolder\
+  ├── installer_setup.iss              ← Inno Setup script
+  ├── CREATE_INSTALLER_ON_WINDOWS.bat  ← Batch script
+  ├── COMPLETE_PACKAGE_GUIDE.md        ← Instructions
+  ├── WINDOWS_BUILD_FINAL.md           ← Detailed guide
+  ├── dist\
+  │   └── StockManagement\
+  │       ├── StockManagement.exe      ← Your app
+  │       └── _internal\               ← Dependencies
+  ├── mongodb\
+  │   └── bin\
+  │       └── mongod.exe               ← MongoDB
+  ├── scripts_installer\
+  │   ├── install_mongodb_service.bat
+  │   └── start_app.bat
+  └── installer_output\                ← Created during compilation
+      └── StockManagement_Setup_v1.0.0.exe  ← FINAL INSTALLER!
+
+
+--------------------------------------------------------------------------------
+NEED HELP?
+--------------------------------------------------------------------------------
+
+1. Make sure you extracted windows_package.zip COMPLETELY
+
+2. Make sure you're in the RIGHT folder when running commands
+
+3. Use METHOD A (GUI) if METHOD B (command line) doesn't work
+
+4. All paths in installer_setup.iss are relative - don't move files!
+
+
+================================================================================
+SUMMARY: Fastest Way
+================================================================================
+
+1. Extract windows_package.zip
+2. Install Inno Setup: https://jrsoftware.org/isdl.php
+3. Right-click installer_setup.iss → Compile
+4. Get installer from: installer_output\StockManagement_Setup_v1.0.0.exe
+5. Done! Give this to your clients!
+
+================================================================================

@@ -1,5 +1,7 @@
 # model.py
 from models.database import db
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 class StockModel:
     def get_repartition_quantite_par_article(self):
@@ -85,14 +87,79 @@ class StockModel:
         return jours
 
     def verifier_alertes(self):
-        messages = []
-        for key, value in self.stock_premix.items():
-            if value < self.seuil_premix:
-                messages.append(f"Stock Premix faible pour {key}: {value}")
-        for key, value in self.stock_usine.items():
-            if value < self.seuil_usine:
-                messages.append(f"Stock Usine faible pour {key}: {value}")
-        return messages
+        """Vérifie les alertes de stock bas et d'expiration imminente"""
+        alertes = {
+            'stock_bas': [],
+            'expiration': []
+        }
+        
+        today = datetime.now()
+        
+        # Parcourir tous les articles avec produits
+        for article in self.db.articles.find({"produits": {"$exists": True, "$ne": []}}):
+            designation = article.get('designation', article.get('name', 'Article sans nom'))
+            code = article.get('code', '-')
+            
+            for prod in article.get('produits', []):
+                dem = prod.get('dem', '-')
+                quantity = prod.get('quantity', 0)
+                threshold = prod.get('threshold', 10)
+                exp_date_str = prod.get('expiration_date')
+                alert_months = prod.get('alert_months', 3)
+                batch = prod.get('batch', prod.get('lot', '-'))
+                
+                # Vérifier stock bas
+                try:
+                    if float(quantity) <= float(threshold):
+                        alertes['stock_bas'].append({
+                            'article': designation,
+                            'code': code,
+                            'dem': dem,
+                            'batch': batch,
+                            'quantity': float(quantity),
+                            'threshold': float(threshold),
+                            'pourcentage': round((float(quantity) / float(threshold)) * 100, 1) if threshold > 0 else 0
+                        })
+                except (ValueError, TypeError):
+                    pass
+                
+                # Vérifier expiration
+                if exp_date_str:
+                    try:
+                        exp_date = datetime.strptime(exp_date_str, '%Y-%m-%d')
+                        alert_date = exp_date - relativedelta(months=int(alert_months))
+                        
+                        if today >= alert_date:
+                            days_until_exp = (exp_date - today).days
+                            
+                            # Déterminer le niveau de criticité
+                            if days_until_exp < 0:
+                                niveau = 'EXPIRÉ'
+                            elif days_until_exp <= 30:
+                                niveau = 'CRITIQUE'
+                            elif days_until_exp <= 90:
+                                niveau = 'ATTENTION'
+                            else:
+                                niveau = 'AVERTISSEMENT'
+                            
+                            alertes['expiration'].append({
+                                'article': designation,
+                                'code': code,
+                                'dem': dem,
+                                'batch': batch,
+                                'exp_date': exp_date_str,
+                                'days_left': days_until_exp,
+                                'niveau': niveau,
+                                'quantity': float(quantity) if quantity else 0
+                            })
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Trier par criticité
+        alertes['stock_bas'].sort(key=lambda x: x['pourcentage'])
+        alertes['expiration'].sort(key=lambda x: x['days_left'])
+        
+        return alertes
 
     def get_stock_premix(self):
         # Lire les articles dont unite = 'premix' (insensible à la casse)

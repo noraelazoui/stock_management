@@ -28,3 +28,7 @@ class DashbordController:
 
     def get_fournisseur(self, nom):
         return self.model.get_fournisseur(nom)
+
+    def get_alertes(self):
+        """Récupère les alertes de stock et d'expiration"""
+        return self.model.verifier_alertes()
