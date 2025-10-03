@@ -32,8 +32,12 @@ echo.
 echo Launching Stock Management Application...
 echo.
 
-REM Launch the application (exe is in parent directory of scripts folder)
-start "" "%~dp0..\StockManagement.exe"
+REM Get the parent directory (remove trailing backslash and go up one level)
+set "SCRIPT_DIR=%~dp0"
+set "APP_DIR=%SCRIPT_DIR%.."
+
+REM Launch the application from parent directory
+start "" "%APP_DIR%\StockManagement.exe"
 
 REM Close this window after 2 seconds
 timeout /t 2 /nobreak >nul
