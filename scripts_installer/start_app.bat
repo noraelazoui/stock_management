@@ -12,8 +12,8 @@ if %errorlevel% neq 0 (
     timeout /t 3 /nobreak > nul
 )
 
-REM Launch the application
+REM Launch the application (exe is in parent directory)
 echo Launching application...
-start "" "%~dp0StockManagement.exe"
+start "" "%~dp0..\StockManagement.exe"
 
 exit

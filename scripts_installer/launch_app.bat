@@ -32,7 +32,7 @@ echo.
 echo Launching Stock Management Application...
 echo.
 
-REM Launch the application
+REM Launch the application (exe is in parent directory of scripts folder)
 start "" "%~dp0..\StockManagement.exe"
 
 REM Close this window after 2 seconds
