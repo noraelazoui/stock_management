@@ -43,6 +43,9 @@ class GestionApp(tk.Tk):
         self.tab_control = ttk.Notebook(self)
         self.tab_control.pack(expand=1, fill='both')
         self.create_tabs()
+        
+        # Bind click event to close DateEntry popups when clicking outside
+        self.bind_all("<Button-1>", self._on_click, add="+")
 
         # Barre de statut
         self.status = tk.StringVar(value="Prêt")
@@ -81,6 +84,71 @@ class GestionApp(tk.Tk):
         """Handle window close button click"""
         if messagebox.askokcancel("Quitter", "Voulez-vous vraiment quitter l'application ?"):
             self.destroy()
+    
+    def _on_click(self, event):
+        """Close DateEntry popups when clicking outside of them"""
+        try:
+            widget = event.widget
+            
+            # Check if click is inside a DateEntry or its popup
+            from tkcalendar import DateEntry
+            
+            # Get the widget that was clicked
+            current = widget
+            is_dateentry_related = False
+            
+            # Check if we clicked on a DateEntry or inside a calendar popup
+            while current:
+                if isinstance(current, DateEntry):
+                    is_dateentry_related = True
+                    break
+                # Check if it's a Toplevel (calendar popup)
+                if isinstance(current, tk.Toplevel):
+                    # Check if this toplevel contains calendar widgets
+                    for child in current.winfo_children():
+                        if 'Calendar' in str(type(child).__name__):
+                            is_dateentry_related = True
+                            break
+                    break
+                try:
+                    current = current.master
+                except:
+                    break
+            
+            # If click is outside DateEntry, close all calendar popups
+            if not is_dateentry_related:
+                self._close_all_calendar_popups()
+        except:
+            pass
+    
+    def _close_all_calendar_popups(self):
+        """Close all open DateEntry calendar popups"""
+        try:
+            # Find all Toplevel windows that are calendar popups
+            for widget in self.winfo_children():
+                self._find_and_close_calendars(widget)
+        except:
+            pass
+    
+    def _find_and_close_calendars(self, widget):
+        """Recursively find and close calendar popups"""
+        try:
+            from tkcalendar import DateEntry
+            
+            if isinstance(widget, DateEntry):
+                # Check if it has an open popup
+                if hasattr(widget, '_top_cal') and widget._top_cal:
+                    try:
+                        if widget._top_cal.winfo_exists():
+                            widget._top_cal.withdraw()
+                    except:
+                        pass
+            
+            # Check children recursively
+            for child in widget.winfo_children():
+                self._find_and_close_calendars(child)
+        except:
+            pass
 
     # -------------------------
     # Menu
@@ -118,15 +186,6 @@ class GestionApp(tk.Tk):
         self.tab_control.add(self.fournisseur_tab, text='Fournisseurs')
         self.init_fournisseur_tab()
 
-        # Onglet Dashboard
-        self.dashboard_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(self.dashboard_tab, text='Dashboard')
-        self.init_dashboard_tab()
-    def init_dashboard_tab(self):
-        from controllers.dashbord_controller import DashbordController
-        from views.dashbord_view import StockView
-        controller = DashbordController()
-        StockView(controller, master=self.dashboard_tab)
     def init_fournisseur_tab(self):
         from models.fournisseur import FournisseurModel
         from views.fournisseur_view import FournisseurView
@@ -143,7 +202,7 @@ class GestionApp(tk.Tk):
     # -------------------------
     def init_article_tab(self):
         from controllers.article_controller import ArticleController
-        controller = ArticleController(self.article_tab)
+        controller = ArticleController(self.article_tab, main_notebook=self.tab_control)
         controller.view.on_add_article = self.add_article_callback
 
     def init_formule_tab(self):
