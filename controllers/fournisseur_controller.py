@@ -5,18 +5,16 @@ class FournisseurController:
         self.model = model
         self.view = view
         self.view.controller = self
-        # Lier les boutons aux fonctions
-        self.view.add_btn.config(command=self.add_fournisseur)
-        self.view.modify_btn.config(command=self.modify_fournisseur)
-        self.view.delete_btn.config(command=self.delete_fournisseur)
-        self.view.reset_btn.config(command=self.view.reset_form)
+        self.view.fournisseur_model = self.model
+        self.view.refresh_tree()
 
     def add_fournisseur(self):
         data = self.view.get_form_data()
         success, msg = self.model.add(data)
         if success:
-            self.view.add_to_tree(data)
+            self.view.refresh_tree()
             self.view.reset_form()
+            self.view.show_message("Fournisseur ajouté")
         else:
             self.view.show_message(msg)
 
@@ -29,8 +27,9 @@ class FournisseurController:
         new_data = self.view.get_form_data()
         success, msg = self.model.update(fournisseur_nom, new_data)
         if success:
-            self.view.update_tree(fournisseur_nom, new_data)
+            self.view.refresh_tree()
             self.view.reset_form()
+            self.view.show_message("Fournisseur modifié")
         else:
             self.view.show_message(msg)
 
@@ -42,7 +41,8 @@ class FournisseurController:
         fournisseur_nom = selected.get(Schema.NAME, selected.get('Nom'))
         success, msg = self.model.delete(fournisseur_nom)
         if success:
-            self.view.delete_from_tree(fournisseur_nom)
+            self.view.refresh_tree()
             self.view.reset_form()
+            self.view.show_message("Fournisseur supprimé")
         else:
             self.view.show_message(msg)

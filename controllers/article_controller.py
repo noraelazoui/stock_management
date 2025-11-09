@@ -11,9 +11,9 @@ class ArticleController:
         for art in articles:
             return {k: v for k, v in art.items() if k != "_id"}
         return None
-    def __init__(self, root):
+    def __init__(self, root, main_notebook=None):
         self.model = ArticleModel()
-        self.view = ArticleView(root, self)
+        self.view = ArticleView(root, self, main_notebook=main_notebook)
         self.view.refresh_table(self.model.articles)
 
     def add_article(self):
@@ -91,5 +91,41 @@ class ArticleController:
                 return
             art = self.model.get_article(art_code)
             if art:
-                self.view.show_detail_form(art)
+                self.view.show_detail_tab(art)
+
+    def add_article_product(self, article_code, product_data):
+        if not article_code:
+            messagebox.showwarning("Article", "Veuillez sélectionner un article valide avant d'ajouter un produit.")
+            return False
+
+        success = self.model.add_article_product(article_code, product_data)
+        if not success:
+            messagebox.showerror("Erreur", "Impossible d'ajouter le produit pour cet article.")
+            return False
+
+        return True
+
+    def update_article_product(self, article_code, index, product_data):
+        if not article_code:
+            messagebox.showwarning("Article", "Veuillez sélectionner un article valide avant de modifier un produit.")
+            return False
+
+        success = self.model.update_article_product(article_code, index, product_data)
+        if not success:
+            messagebox.showerror("Erreur", "Impossible de modifier ce produit de l'article.")
+            return False
+
+        return True
+
+    def delete_article_product(self, article_code, index):
+        if not article_code:
+            messagebox.showwarning("Article", "Veuillez sélectionner un article valide avant de supprimer un produit.")
+            return False
+
+        success = self.model.delete_article_product(article_code, index)
+        if not success:
+            messagebox.showerror("Erreur", "Impossible de supprimer ce produit de l'article.")
+            return False
+
+        return True
 

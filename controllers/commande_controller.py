@@ -15,7 +15,6 @@ class CommandeController:
         self.view.add_btn.config(command=self.add_commande)
         self.view.modify_btn.config(command=self.modify_commande)
         self.view.delete_btn.config(command=self.delete_commande)
-        self.view.reset_btn.config(command=self.reset_form)
         
         # Initialisation de l'affichage
         self.refresh_tree()
@@ -32,19 +31,16 @@ class CommandeController:
                 infos_gen = c.get(Schema.ORDER_INFO, c.get("infos_commande", [{}]))[0] if c.get(Schema.ORDER_INFO, c.get("infos_commande")) else {}
                 
                 self.view.tree.insert("", "end", values=(
-                    ref, 
+                    ref,
                     get_field_value(c, [Schema.RECEPTION_DATE, "date_reception"], ""),
                     get_field_value(info_detail, [Schema.OrderDetail.MODE, "mode"], ""),
                     get_field_value(info_detail, [Schema.OrderDetail.SUPPLIER, "fournisseur"], get_field_value(c, ["fournisseur"], "")),
                     get_field_value(info_detail, [Schema.OrderDetail.PAYMENT, "payement"], ""),
                     get_field_value(info_detail, [Schema.OrderDetail.TRANSPORT, "transport"], ""),
                     get_field_value(info_detail, [Schema.OrderDetail.ADDRESS, "adresse"], ""),
-                    get_field_value(info_detail, [Schema.OrderDetail.NUMBER, "numero"], ""),
-                    get_field_value(infos_gen, [Schema.OrderInfo.STATUS, "statut"], get_field_value(c, ["statut"], "")),
-                    get_field_value(infos_gen, [Schema.OrderInfo.REMARK, "remarque"], ""),
-                    get_field_value(infos_gen, [Schema.OrderInfo.USER, "utilisateur"], ""),
                     "Détail"
                 ))
+        self.view.update_fournisseurs()
 
     def load_commande_details(self, ref, detail_frame):
         """
@@ -66,7 +62,30 @@ class CommandeController:
             tree = detail_frame.product_tree
             tree.delete(*tree.get_children())
             
-            produits = get_field_value(commande, [Schema.PRODUCTS, "produits"], [])
+            produits = get_field_value(
+                commande,
+                [
+                    Schema.PRODUCTS,
+                    "produits",
+                    "Produits",
+                    "product",
+                    "products",
+                    "detail_produits",
+                    "produit",
+                ],
+                default=[]
+            )
+            if produits is None:
+                produits = []
+            if not produits:
+                # Certains jeux de données stockent les produits dans detail_commande
+                alt_produits = get_field_value(
+                    commande,
+                    ["detail_commande", "detailCommande"],
+                    default=[]
+                )
+                if isinstance(alt_produits, list):
+                    produits = alt_produits
             print(f"DEBUG - Produits à charger: {produits}")
             
             for produit in produits:
@@ -93,34 +112,6 @@ class CommandeController:
                 tree.insert("", "end", values=values)
                 print(f"DEBUG - Produit inséré: {values}")
 
-        # === CHARGEMENT DU TABLEAU INFOS COMMANDE - REMOVED ===
-        # Info commande is now displayed in the main grid, no separate table needed
-        
-        # === CHARGEMENT DU TABLEAU INFOS GENERALES (Statut, Remarque, Utilisateur) ===
-        if hasattr(detail_frame, 'infos_generales_table'):
-            infos_table = detail_frame.infos_generales_table
-            infos_table.delete(*infos_table.get_children())
-            
-            # Utiliser le champ 'infos_commande' pour les infos générales
-            infos_commande = get_field_value(commande, [Schema.ORDER_INFO, "infos_commande"], [])
-            print(f"DEBUG - infos_commande à charger: {infos_commande}")
-            
-            for info in infos_commande:
-                if isinstance(info, dict):
-                    I = Schema.OrderInfo
-                    values = [
-                        get_field_value(info, [I.STATUS, "Statut"], ""),
-                        get_field_value(info, [I.REMARK, "Remarque"], ""),
-                        get_field_value(info, [I.USER, "Utilisateur"], "")
-                    ]
-                elif isinstance(info, (list, tuple)):
-                    values = list(info)
-                else:
-                    values = [str(info)] + [""] * 2
-                    
-                infos_table.insert("", "end", values=values)
-                print(f"DEBUG - Info générale insérée: {values}")
-
     # === GESTION DES COMMANDES PRINCIPALES ===
     def add_commande(self):
         """Ajoute une nouvelle commande"""
@@ -131,10 +122,11 @@ class CommandeController:
         payement = self.view.payement_entry.get().strip()
         transport = self.view.transport_entry.get().strip()
         adresse = self.view.adresse_entry.get().strip()
-        numero = self.view.numero_entry.get().strip()
-        statut = self.view.statut_entry.get().strip() or "Créé"
-        remarque = self.view.remarque_entry.get().strip()
-        utilisateur = self.view.utilisateur_entry.get().strip()
+        # Champs supprimés de l'interface
+        numero = ""
+        statut = "Créé"
+        remarque = ""
+        utilisateur = ""
 
         if not ref:
             messagebox.showwarning("Champs manquants", "Veuillez saisir la référence.")
@@ -168,6 +160,7 @@ class CommandeController:
         self.model.add_commande(cmd)
         self.refresh_tree()
         self.reset_form()
+        self.view.update_fournisseurs()
         messagebox.showinfo("Succès", f"Commande {ref} ajoutée avec succès.")
 
     def modify_commande(self):
@@ -187,10 +180,6 @@ class CommandeController:
         payement = self.view.payement_entry.get().strip()
         transport = self.view.transport_entry.get().strip()
         adresse = self.view.adresse_entry.get().strip()
-        numero = self.view.numero_entry.get().strip()
-        statut = self.view.statut_entry.get().strip()
-        remarque = self.view.remarque_entry.get().strip()
-        utilisateur = self.view.utilisateur_entry.get().strip()
         
         if not ref:
             messagebox.showwarning("Champs manquants", "Référence obligatoire.")
@@ -199,32 +188,58 @@ class CommandeController:
         # Get existing command to preserve produits
         old_cmd = self.model.get_commande(old_ref)
         
-        new_cmd = {
-            Schema.REF: ref,
-            Schema.RECEPTION_DATE: date_reception,
-            Schema.SUPPLIER: fournisseur,
-            Schema.PRODUCTS: get_field_value(old_cmd, [Schema.PRODUCTS, "produits"], []) if old_cmd else [],
-            Schema.ORDER_INFO: [{
-                Schema.OrderInfo.STATUS: statut,
-                Schema.OrderInfo.REMARK: remarque,
-                Schema.OrderInfo.USER: utilisateur
-            }],
-            Schema.ORDER_DETAIL: [{
+        existing_products = get_field_value(old_cmd, [Schema.PRODUCTS, "produits"], []) if old_cmd else []
+        existing_details = get_field_value(old_cmd, [Schema.ORDER_DETAIL, "infos_commande_detail"], []) if old_cmd else []
+        existing_infos = get_field_value(old_cmd, [Schema.ORDER_INFO, "infos_commande"], []) if old_cmd else []
+
+        updated_details = []
+        if existing_details:
+            first_detail = dict(existing_details[0])
+            first_detail.update({
                 Schema.OrderDetail.MODE: mode,
                 Schema.OrderDetail.DATE: date_reception,
                 Schema.OrderDetail.SUPPLIER: fournisseur,
                 Schema.OrderDetail.PAYMENT: payement,
                 Schema.OrderDetail.ADDRESS: adresse,
                 Schema.OrderDetail.TRANSPORT: transport,
-                Schema.OrderDetail.NUMBER: numero
-            }],
-            "statut": statut  # Keep backward compatibility
+            })
+            updated_details.append(first_detail)
+            if len(existing_details) > 1:
+                updated_details.extend([dict(detail) for detail in existing_details[1:]])
+        else:
+            updated_details.append({
+                Schema.OrderDetail.MODE: mode,
+                Schema.OrderDetail.DATE: date_reception,
+                Schema.OrderDetail.SUPPLIER: fournisseur,
+                Schema.OrderDetail.PAYMENT: payement,
+                Schema.OrderDetail.ADDRESS: adresse,
+                Schema.OrderDetail.TRANSPORT: transport,
+                Schema.OrderDetail.NUMBER: ""
+            })
+
+        updated_infos = [dict(info) for info in existing_infos] if existing_infos else [{
+            Schema.OrderInfo.STATUS: get_field_value(old_cmd, ["statut"], "Créé"),
+            Schema.OrderInfo.REMARK: "",
+            Schema.OrderInfo.USER: ""
+        }]
+
+        statut_value = get_field_value(updated_infos[0], [Schema.OrderInfo.STATUS, "statut"], get_field_value(old_cmd, ["statut"], "")) if updated_infos else get_field_value(old_cmd, ["statut"], "")
+
+        new_cmd = {
+            Schema.REF: ref,
+            Schema.RECEPTION_DATE: date_reception,
+            Schema.SUPPLIER: fournisseur,
+            Schema.PRODUCTS: existing_products,
+            Schema.ORDER_INFO: updated_infos,
+            Schema.ORDER_DETAIL: updated_details,
+            "statut": statut_value
         }
             
         self.model.update_commande(old_ref, new_cmd)
         self.refresh_tree()
         self.reset_form()
         messagebox.showinfo("Succès", "Commande modifiée avec succès.")
+        self.view.update_fournisseurs()
 
     def delete_commande(self):
         """Supprime une ou plusieurs commandes"""
@@ -240,6 +255,7 @@ class CommandeController:
             self.refresh_tree()
             self.reset_form()
             messagebox.showinfo("Succès", f"{len(refs_to_delete)} commande(s) supprimée(s).")
+            self.view.update_fournisseurs()
 
     def reset_form(self):
         """Remet à zéro le formulaire principal"""
@@ -247,38 +263,50 @@ class CommandeController:
         self.view.date_reception_entry.delete(0, "end")
         self.view.date_reception_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
         
-        if hasattr(self.view, 'mode_entry'):
-            self.view.mode_entry.delete(0, "end")
-        if hasattr(self.view, 'fournisseur_combo'):
-            self.view.fournisseur_combo.set("")
-        if hasattr(self.view, 'payement_entry'):
-            self.view.payement_entry.delete(0, "end")
-        if hasattr(self.view, 'transport_entry'):
-            self.view.transport_entry.delete(0, "end")
-        if hasattr(self.view, 'adresse_entry'):
-            self.view.adresse_entry.delete(0, "end")
-        if hasattr(self.view, 'numero_entry'):
-            self.view.numero_entry.delete(0, "end")
-        if hasattr(self.view, 'statut_entry'):
-            self.view.statut_entry.delete(0, "end")
-        if hasattr(self.view, 'remarque_entry'):
-            self.view.remarque_entry.delete(0, "end")
-        if hasattr(self.view, 'utilisateur_entry'):
-            self.view.utilisateur_entry.delete(0, "end")
+        for attr in (
+            "mode_entry",
+            "fournisseur_combo",
+            "payement_entry",
+            "transport_entry",
+            "adresse_entry",
+            "numero_entry",
+            "statut_entry",
+            "remarque_entry",
+            "utilisateur_entry",
+        ):
+            widget = getattr(self.view, attr, None)
+            if not widget:
+                continue
+            if hasattr(widget, "delete"):
+                try:
+                    widget.delete(0, "end")
+                except Exception:
+                    try:
+                        widget.set("")
+                    except Exception:
+                        pass
+            elif hasattr(widget, "set"):
+                widget.set("")
 
     # === GESTION DES PRODUITS ===
     def add_product_row(self, ref, product_data):
         """Ajoute un produit à la commande ET met à jour la base de données"""
         try:
+            print(f"DEBUG - add_product_row: ref={ref}")
+            print(f"DEBUG - product_data={product_data}")
+            
             self.model.add_produit_to_commande(ref, product_data)
-            
+            print(f"DEBUG - Produit ajouté à la commande")
+
             # Mettre à jour l'article correspondant si nécessaire
-            self._update_article_from_product(product_data)
-            
+            self._update_article_from_product(product_data, action="add")
+
             print(f"DEBUG - Produit ajouté à la base: {product_data}")
             return True
         except Exception as e:
             print(f"Erreur ajout produit: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Erreur", f"Erreur lors de l'ajout du produit: {e}")
             return False
 
@@ -286,10 +314,10 @@ class CommandeController:
         """Modifie un produit dans la commande ET met à jour la base de données"""
         try:
             self.model.update_produit_in_commande(ref, old_product, new_product)
-            
+
             # Mettre à jour l'article correspondant si nécessaire
-            self._update_article_from_product(new_product)
-            
+            self._update_article_from_product(new_product, action="update", old_product=old_product)
+
             print(f"DEBUG - Produit modifié dans la base: {old_product} -> {new_product}")
             return True
         except Exception as e:
@@ -301,6 +329,7 @@ class CommandeController:
         """Supprime un produit de la commande ET met à jour la base de données"""
         try:
             self.model.delete_produit_from_commande(ref, product_data)
+            self._update_article_from_product(product_data, action="delete")
             print(f"DEBUG - Produit supprimé de la base: {product_data}")
             return True
         except Exception as e:
@@ -308,38 +337,191 @@ class CommandeController:
             messagebox.showerror("Erreur", f"Erreur lors de la suppression du produit: {e}")
             return False
 
-    def _update_article_from_product(self, product_data):
-        """Met à jour l'article correspondant au produit"""
+    def _update_article_from_product(self, product_data, action="add", old_product=None):
+        """Met à jour l'article correspondant au produit - logique basée sur DEM"""
         try:
             from models.article import ArticleModel
             from models.schemas import ArticleSchema as ArtSchema
+
+            code_article = get_field_value(product_data, [Schema.Product.CODE, "Code", "code"])
+            print(f"DEBUG - _update_article_from_product: code={code_article}, action={action}")
             
-            P = Schema.Product
-            if isinstance(product_data, dict):
-                code_article = get_field_value(product_data, [P.CODE, "Code"])
-                prix_ttc = get_field_value(product_data, [P.PRICE_WITH_VAT, "Prix TTC"])
-                dem = get_field_value(product_data, [P.DEM, "DEM"])
-                quantite_reel = get_field_value(product_data, [P.REAL_QUANTITY, "QUANTITE REEL"])
-            else:
-                # Si c'est une liste
-                code_article = product_data[0] if len(product_data) > 0 else None
-                dem = product_data[2] if len(product_data) > 2 else None
-                quantite_reel = product_data[4] if len(product_data) > 4 else None
-                prix_ttc = product_data[7] if len(product_data) > 7 else None
+            if not code_article:
+                print("DEBUG - Pas de code article")
+                return
 
-            update_data = {}
-            if prix_ttc is not None and prix_ttc != "":
-                update_data[ArtSchema.Product.PRICE] = prix_ttc
-            if dem is not None and dem != "":
-                update_data[ArtSchema.Product.DEM] = dem
-            if quantite_reel is not None and quantite_reel != "":
-                update_data[ArtSchema.Product.QUANTITY] = quantite_reel
+            article_model = ArticleModel()
+            article = article_model.get_article(code_article)
+            if not article:
+                print(f"DEBUG - Article {code_article} non trouvé")
+                return
 
-            if code_article and update_data:
-                ArticleModel().modify_article(code_article, update_data)
-                
+            produits = get_field_value(article, [ArtSchema.PRODUCTS, "produits"], default=[])
+            if not isinstance(produits, list):
+                produits = list(produits) if produits else []
+
+            print(f"DEBUG - Produits existants: {len(produits)}")
+            new_product = self._build_article_product_data(product_data)
+            new_dem = str(new_product.get("dem", "")).strip()
+            
+            print(f"DEBUG - Nouveau produit DEM={new_dem}, quantite={new_product.get('quantite')}")
+
+            # Chercher un produit avec le même DEM
+            found_index = None
+            for idx, prod in enumerate(produits):
+                if not isinstance(prod, dict):
+                    continue
+                existing_dem = str(get_field_value(prod, [ArtSchema.Product.DEM, "DEM", "dem"], "")).strip()
+                if existing_dem == new_dem and new_dem:
+                    found_index = idx
+                    print(f"DEBUG - Produit avec DEM={new_dem} trouvé à l'index {idx}")
+                    break
+
+            if action == "add":
+                if found_index is not None:
+                    # Mettre à jour le produit existant avec le même DEM
+                    old_quantity = float(get_field_value(produits[found_index], ["Quantité", "quantite", "quantity"], 0))
+                    new_quantity_add = float(new_product.get("quantite", 0))
+                    total_quantity = old_quantity + new_quantity_add
+                    
+                    # Mettre à jour TOUS les champs du produit existant
+                    produits[found_index]["quantite"] = str(total_quantity)
+                    produits[found_index]["Quantité"] = str(total_quantity)
+                    produits[found_index]["quantity"] = str(total_quantity)
+                    
+                    # Mettre à jour le prix
+                    produits[found_index]["prix"] = new_product.get("prix", "")
+                    produits[found_index]["Prix"] = new_product.get("prix", "")
+                    produits[found_index]["price"] = new_product.get("prix", "")
+                    produits[found_index]["prix_ttc"] = new_product.get("prix_ttc", "")
+                    produits[found_index]["price_ttc"] = new_product.get("price_ttc", "")
+                    
+                    # Mettre à jour les dates
+                    produits[found_index]["date_fab"] = new_product.get("date_fab", "")
+                    produits[found_index]["Date fabrication"] = new_product.get("Date fabrication", "")
+                    produits[found_index]["manufacturing_date"] = new_product.get("manufacturing_date", "")
+                    produits[found_index]["date_fabrication"] = new_product.get("date_fabrication", "")
+                    
+                    produits[found_index]["date_exp"] = new_product.get("date_exp", "")
+                    produits[found_index]["Date expiration"] = new_product.get("Date expiration", "")
+                    produits[found_index]["expiration_date"] = new_product.get("expiration_date", "")
+                    produits[found_index]["date_expiration"] = new_product.get("date_expiration", "")
+                    
+                    print(f"DEBUG - Quantite mise a jour: {old_quantity} + {new_quantity_add} = {total_quantity}")
+                else:
+                    # Ajouter un nouveau produit
+                    produits.append(new_product)
+                    print(f"DEBUG - Nouveau produit ajoute avec DEM={new_dem}")
+
+            elif action == "update":
+                if old_product:
+                    old_normalized = self._build_article_product_data(old_product)
+                    old_dem = str(old_normalized.get("dem", "")).strip()
+                    
+                    # Chercher l'ancien produit par DEM
+                    old_index = None
+                    for idx, prod in enumerate(produits):
+                        if not isinstance(prod, dict):
+                            continue
+                        existing_dem = str(get_field_value(prod, [ArtSchema.Product.DEM, "DEM", "dem"], "")).strip()
+                        if existing_dem == old_dem and old_dem:
+                            old_index = idx
+                            break
+                    
+                    if old_index is not None:
+                        produits[old_index] = new_product
+                        print(f"DEBUG - Produit avec DEM={old_dem} mis à jour")
+                    else:
+                        produits.append(new_product)
+                        print(f"DEBUG - Ancien produit non trouvé, nouveau ajouté")
+                else:
+                    if found_index is not None:
+                        produits[found_index] = new_product
+                    else:
+                        produits.append(new_product)
+
+            elif action == "delete":
+                if found_index is not None:
+                    del produits[found_index]
+                    print(f"DEBUG - Produit avec DEM={new_dem} supprimé")
+
+            produits = [dict(prod) for prod in produits]
+            save_result = article_model._save_article_products(code_article, produits)
+            print(f"DEBUG - Sauvegarde: {save_result}")
+            
+            article_model.recalculate_main_quantity(code_article)
+
         except Exception as e:
             print(f"Erreur mise à jour article: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _build_article_product_data(self, product_data):
+        from models.schemas import ArticleSchema as ArtSchema
+
+        price = get_field_value(product_data, ["Prix TTC", "prix_ttc", "price_ttc", "price", "Prix", "prix", "Prix UNI.", "price_with_vat", Schema.Product.UNIT_PRICE, Schema.Product.PRICE_WITH_VAT], "")
+        quantity = get_field_value(product_data, ["QUANTITE REEL", "QUANTITE", "quantite", "Quantité", "quantity", Schema.Product.QUANTITY], "")
+        dem = get_field_value(product_data, ["DEM", "dem", Schema.Product.DEM], "")
+        date_fab = get_field_value(product_data, ["date_fab", "Date fabrication", "manufacturing_date"], "")
+        date_exp = get_field_value(product_data, ["date_exp", "Date expiration", "expiration_date"], "")
+
+        normalized = {
+            "Prix": price,
+            "prix": price,
+            "prix_ttc": price,
+            "price_ttc": price,
+            "Quantité": quantity,
+            "quantite": quantity,
+            "quantity": quantity,
+            "DEM": dem,
+            "dem": dem,
+            "Date fabrication": date_fab,
+            "date_fab": date_fab,
+            "date_fabrication": date_fab,
+            "manufacturing_date": date_fab,
+            "Date expiration": date_exp,
+            "date_exp": date_exp,
+            "date_expiration": date_exp,
+            "expiration_date": date_exp,
+        }
+        # Ajouter les constantes du schéma si elles existent
+        if hasattr(ArtSchema.Product, 'PRICE'):
+            normalized[ArtSchema.Product.PRICE] = price
+        if hasattr(ArtSchema.Product, 'QUANTITY'):
+            normalized[ArtSchema.Product.QUANTITY] = quantity
+        if hasattr(ArtSchema.Product, 'DEM'):
+            normalized[ArtSchema.Product.DEM] = dem
+        if hasattr(ArtSchema.Product, 'MANUFACTURING_DATE'):
+            normalized[ArtSchema.Product.MANUFACTURING_DATE] = date_fab
+        if hasattr(ArtSchema.Product, 'EXPIRATION_DATE'):
+            normalized[ArtSchema.Product.EXPIRATION_DATE] = date_exp
+        
+        return normalized
+
+    def _find_article_product_index(self, produits, target_product):
+        from models.schemas import ArticleSchema as ArtSchema
+
+        if not target_product:
+            return None
+
+        for idx, prod in enumerate(produits):
+            if not isinstance(prod, dict):
+                continue
+            price = get_field_value(prod, ["prix", "Prix", "prix_ttc", "Prix TTC", "price_ttc", "price"], "")
+            quantity = get_field_value(prod, ["quantite", "Quantité", "QUANTITE", "quantity"], "")
+            dem = get_field_value(prod, ["dem", "DEM"], "")
+            date_fab = get_field_value(prod, ["date_fab", "date_fabrication", "Date fabrication", "manufacturing_date"], "")
+            date_exp = get_field_value(prod, ["date_exp", "date_expiration", "Date expiration", "expiration_date"], "")
+
+            if (
+                str(price) == str(target_product.get("prix", ""))
+                and str(quantity) == str(target_product.get("quantite", ""))
+                and str(dem) == str(target_product.get("dem", ""))
+                and str(date_fab) == str(target_product.get("date_fab", ""))
+                and str(date_exp) == str(target_product.get("date_exp", ""))
+            ):
+                return idx
+        return None
 
     # === GESTION DES INFOS COMMANDE DETAIL (Mode, Date, Fournisseur, etc.) ===
     def add_info_commande_detail(self, ref, info_data):
@@ -373,38 +555,4 @@ class CommandeController:
         except Exception as e:
             print(f"Erreur suppression info commande detail: {e}")
             messagebox.showerror("Erreur", f"Erreur lors de la suppression de l'info commande: {e}")
-            return False
-
-    # === GESTION DES INFOS GENERALES (infos_commande) ===
-    def add_infos_commande(self, ref, infos_data):
-        """Ajoute des infos générales à la commande"""
-        try:
-            self.model.add_infos_commande(ref, infos_data)
-            print(f"DEBUG - Infos générales ajoutées à la base: {infos_data}")
-            return True
-        except Exception as e:
-            print(f"Erreur ajout infos générales: {e}")
-            messagebox.showerror("Erreur", f"Erreur lors de l'ajout des infos générales: {e}")
-            return False
-
-    def modify_infos_commande(self, ref, old_infos, new_infos):
-        """Modifie des infos générales dans la commande"""
-        try:
-            self.model.update_infos_commande(ref, old_infos, new_infos)
-            print(f"DEBUG - Infos générales modifiées dans la base: {old_infos} -> {new_infos}")
-            return True
-        except Exception as e:
-            print(f"Erreur modification infos générales: {e}")
-            messagebox.showerror("Erreur", f"Erreur lors de la modification des infos générales: {e}")
-            return False
-
-    def delete_infos_commande(self, ref, infos_data):
-        """Supprime des infos générales de la commande"""
-        try:
-            self.model.delete_infos_commande(ref, infos_data)
-            print(f"DEBUG - Infos générales supprimées de la base: {infos_data}")
-            return True
-        except Exception as e:
-            print(f"Erreur suppression infos générales: {e}")
-            messagebox.showerror("Erreur", f"Erreur lors de la suppression des infos générales: {e}")
             return False
