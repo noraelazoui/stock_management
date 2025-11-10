@@ -500,18 +500,45 @@ class FabricationView(tk.Frame):
             # Afficher les articles existants de detail-fabrication dans le tableau
             if fabrication and "detail-fabrication" in fabrication:
                 details = fabrication["detail-fabrication"]
-                for detail in details:
+                print(f"[DEBUG] Nombre de details a afficher: {len(details)}")
+                
+                for idx, detail in enumerate(details):
+                    print(f"\n[DEBUG] Detail #{idx + 1}:")
+                    
+                    article_code = detail.get("article", "")
+                    lot_detail = detail.get("lot", "")
+                    
+                    # Gérer à la fois les anciennes et nouvelles clés
+                    optim_val = detail.get("optim", detail.get("optim_formule", ""))
+                    recette_val = detail.get("recette", detail.get("recette_code", detail.get("recette_formule", "")))
+                    
+                    # Si pas d'optim/recette mais a un LOT, chercher depuis la fabrication source
+                    if (not optim_val or not recette_val) and lot_detail and str(lot_detail).strip() != "":
+                        print(f"[DEBUG] Recherche optim/recette pour {article_code} lot {lot_detail}")
+                        fabrication_source = db.fabrications.find_one({
+                            "code": article_code,
+                            "lot": lot_detail
+                        })
+                        if fabrication_source:
+                            if not optim_val:
+                                optim_val = fabrication_source.get("optim", "")
+                            if not recette_val:
+                                recette_val = fabrication_source.get("recette_code", "")
+                            print(f"[DEBUG] Trouve: optim={optim_val}, recette={recette_val}")
+                        else:
+                            print(f"[DEBUG] Fabrication source non trouvee")
+                    
                     values = [
-                        detail.get("article", ""),
+                        article_code,
                         detail.get("dem", ""),
                         detail.get("prix", ""),
                         detail.get("quantite_stock", ""),
                         detail.get("pourcentage", ""),
-                        detail.get("optim", ""),
-                        detail.get("recette_code", ""),
+                        optim_val,
+                        recette_val,
                         detail.get("quantite_fabrique", ""),
                         detail.get("prix_total", ""),
-                        detail.get("lot", "")
+                        lot_detail
                     ]
                     detail_tree.insert('', 'end', values=values)
 
@@ -579,14 +606,33 @@ class FabricationView(tk.Frame):
                 for item in self.detail_tree.get_children():
                     self.detail_tree.delete(item)
                 for detail in details:
+                    article_code = detail.get("article", "")
+                    lot_detail = detail.get("lot", "")
+                    
+                    # Gérer à la fois les anciennes clés (optim_formule, recette_formule) et les nouvelles (optim, recette)
+                    optim_val = detail.get("optim", detail.get("optim_formule", ""))
+                    recette_val = detail.get("recette", detail.get("recette_code", detail.get("recette_formule", "")))
+                    
+                    # Si pas d'optim/recette mais a un LOT, chercher depuis la fabrication source
+                    if (not optim_val or not recette_val) and lot_detail and str(lot_detail).strip() != "":
+                        fabrication_source = db.fabrications.find_one({
+                            "code": article_code,
+                            "lot": lot_detail
+                        })
+                        if fabrication_source:
+                            if not optim_val:
+                                optim_val = fabrication_source.get("optim", "")
+                            if not recette_val:
+                                recette_val = fabrication_source.get("recette_code", "")
+                    
                     values = [
-                        detail.get("article", ""),
+                        article_code,
                         detail.get("dem", ""),
                         f"{detail.get('prix', 0)}",
                         f"{detail.get('quantite_stock', 0)}",
                         f"{detail.get('pourcentage', 0)}%",
-                        detail.get("optim_formule", ""),
-                        detail.get("recette_formule", ""),
+                        optim_val,
+                        recette_val,
                         f"{detail.get('quantite_fabrique', 0)}",
                         f"{detail.get('prix_total', float(detail.get('prix', 0)) * float(detail.get('quantite_fabrique', 0)))}"
                     ]
@@ -992,9 +1038,13 @@ class FabricationView(tk.Frame):
                 "prix": prix,
                 "quantite_stock": detail.get("quantite_en_stock", ""),
                 "pourcentage": pourcentage,
+                "optim": detail.get("optim", ""),
+                "recette": detail.get("recette", ""),
                 "quantite_fabrique": quantite_fabriquee,
-                "prix_total": prix_total if "prix_total" in locals() else 0.0
+                "prix_total": prix_total if "prix_total" in locals() else 0.0,
+                "lot": detail.get("lot", "")
             }
+            print(f"[DEBUG] Detail MongoDB: optim={detail_mongo.get('optim')}, recette={detail_mongo.get('recette')}")
 
             # Récupérer l'état actuel des détails dans MongoDB
             from models.database import db
@@ -1058,23 +1108,49 @@ class FabricationView(tk.Frame):
                     e.config(state='normal')
             lot_combo = self.detail_entries["Lot"]
             selected_lot = lot_combo.get()
-            # On récupère la recette et l'optim depuis les champs Optim et Recette
-            recette_value = self.detail_entries["Recette"].get() if "Recette" in self.detail_entries else ""
-            optim_value = self.detail_entries["Optim"].get() if "Optim" in self.detail_entries else ""
+            article_code = self.detail_entries["Article"].get()
+            
+            print(f"[DEBUG] on_lot_selected: article={article_code}, lot={selected_lot}")
+            
             from models.database import db
+            # Chercher la fabrication par code article et lot
             fabrication = db.fabrications.find_one({
-                "recette_code": recette_value,
-                "optim": optim_value,
+                "code": article_code,
                 "lot": selected_lot
             })
-            prix = fabrication.get("prix_formule", "") if fabrication else ""
-            quantite = fabrication.get("quantite_a_fabriquer", "") if fabrication else ""
-            if "Prix" in self.detail_entries:
-                self.detail_entries["Prix"].delete(0, tk.END)
-                self.detail_entries["Prix"].insert(0, prix)
-            if "Quantité en stock" in self.detail_entries:
-                self.detail_entries["Quantité en stock"].delete(0, tk.END)
-                self.detail_entries["Quantité en stock"].insert(0, quantite)
+            
+            print(f"[DEBUG] Fabrication trouvee: {fabrication is not None}")
+            
+            if fabrication:
+                prix = fabrication.get("prix_formule", "")
+                quantite = fabrication.get("quantite_a_fabriquer", "")
+                optim_value = fabrication.get("optim", "")
+                recette_value = fabrication.get("recette_code", "")
+                
+                print(f"[DEBUG] Prix: {prix}, Quantite: {quantite}, Optim: {optim_value}, Recette: {recette_value}")
+                
+                # Remplir Prix
+                if "Prix" in self.detail_entries:
+                    self.detail_entries["Prix"].delete(0, tk.END)
+                    self.detail_entries["Prix"].insert(0, prix)
+                
+                # Remplir Quantité en stock
+                if "Quantité en stock" in self.detail_entries:
+                    self.detail_entries["Quantité en stock"].delete(0, tk.END)
+                    self.detail_entries["Quantité en stock"].insert(0, quantite)
+                
+                # Remplir Optim
+                if "Optim" in self.detail_entries:
+                    self.detail_entries["Optim"].delete(0, tk.END)
+                    self.detail_entries["Optim"].insert(0, optim_value)
+                    print(f"[DEBUG] Optim rempli: {optim_value}")
+                
+                # Remplir Recette
+                if "Recette" in self.detail_entries:
+                    self.detail_entries["Recette"].delete(0, tk.END)
+                    self.detail_entries["Recette"].insert(0, recette_value)
+                    print(f"[DEBUG] Recette remplie: {recette_value}")
+            
             # Remettre readonly
             for k, e in self.detail_entries.items():
                 if isinstance(e, ttk.Entry):
