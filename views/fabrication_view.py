@@ -164,7 +164,7 @@ class FabricationView(tk.Frame):
         self.table_labelframe.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self.table_frame = ttk.Frame(self.table_labelframe)
         self.table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
+    
         # Création du tableau avec les colonnes
         columns = ("Code", "Optime", "Recette", "NBcomposante", "Quantité à fabriquer (Kg)", "Date Fabrication", "Lot", "Prix de Formule", "Détail")
         self.tree = ttk.Treeview(self.table_frame, columns=columns, show="headings")
@@ -409,12 +409,6 @@ class FabricationView(tk.Frame):
                 traceback.print_exc()
                 self.articles_disponibles = []
 
-            except Exception as e:
-                print(f"Erreur lors du chargement des composantes: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                self.articles_disponibles = []
-
 
             # Créer les champs de saisie en utilisant self.input_fields
             for field in self.input_fields:
@@ -520,10 +514,6 @@ class FabricationView(tk.Frame):
                         detail.get("lot", "")
                     ]
                     detail_tree.insert('', 'end', values=values)
-
-            # Bouton retour en bas
-            btn_retour = ttk.Button(detail_frame, text="Retour", command=lambda: self.retour_vue_principale(detail_frame), width=15)
-            btn_retour.pack(pady=10)
 
             # Sauvegarder les références dont nous aurons besoin
             self.current_detail_frame = detail_frame
@@ -920,9 +910,18 @@ class FabricationView(tk.Frame):
             if not self.articles_disponibles:
                 print("Erreur: Aucun article disponible")
                 return
-            # Utiliser le premier article disponible
-            article = self.articles_disponibles[0]
-            self.articles_disponibles.remove(article)
+            
+            # Utiliser l'article SÉLECTIONNÉ PAR L'UTILISATEUR dans le combobox
+            article = self.detail_entries["Article"].get()
+            
+            # Vérifier qu'un article a bien été sélectionné
+            if not article or article == "":
+                print("[WARNING] Aucun article sélectionné dans le combobox")
+                import tkinter.messagebox as msgbox
+                msgbox.showwarning("Article manquant", "Veuillez sélectionner un article dans la liste déroulante")
+                return
+            
+            print(f"[DEBUG] Ajout de l'article: {article} (sélectionné par l'utilisateur)")
 
             # Récupérer les valeurs des champs
             valeurs = []
@@ -1169,9 +1168,7 @@ class FabricationView(tk.Frame):
                 print(f"[DEBUG] Article object from DB: {article}")
                 if article:
                     dem_values = set()
-                    if article.get("dem"):
-                        print(f"[DEBUG] Article has 'dem' field: {article['dem']}")
-                        dem_values.add(article["dem"])
+                    # Ne pas inclure le DEM principal de l'article, seulement les DEM des produits
                     produits = article.get("produits", [])
                     print(f"[DEBUG] Produits list: {produits}")
                     for produit in produits:
@@ -1188,19 +1185,16 @@ class FabricationView(tk.Frame):
                         dem_combobox["values"] = dem_values
                         dem_combobox.set(dem_values[0])
                         # Trigger the DEM selected event to populate Prix and Quantité
+                        # This will fill Prix and Quantité en stock with values from the selected DEM
                         self.on_dem_selected(None)
                     else:
                         dem_combobox["values"] = []
                         dem_combobox.set("")
-                    # Get price and quantity from article (check multiple field name variations)
-                    prix = article.get("prix") or article.get("price") or ""
-                    quantite = article.get("quantite") or article.get("quantity") or ""
-                    if "Prix" in self.detail_entries:
-                        self.detail_entries["Prix"].delete(0, tk.END)
-                        self.detail_entries["Prix"].insert(0, prix)
-                    if "Quantité en stock" in self.detail_entries:
-                        self.detail_entries["Quantité en stock"].delete(0, tk.END)
-                        self.detail_entries["Quantité en stock"].insert(0, quantite)
+                        # Clear Prix and Quantité en stock if no DEM available
+                        if "Prix" in self.detail_entries:
+                            self.detail_entries["Prix"].delete(0, tk.END)
+                        if "Quantité en stock" in self.detail_entries:
+                            self.detail_entries["Quantité en stock"].delete(0, tk.END)
                     # Afficher le pourcentage
                     pourcentage = self.get_pourcentage_article(article_code)
                     if "Pourcentage" in self.detail_entries:
@@ -1351,22 +1345,24 @@ class FabricationView(tk.Frame):
         """
         try:
             selected_dem = self.detail_entries["DEM"].get()
+            selected_article_code = self.detail_entries["Article"].get()
 
             if not selected_dem:
                 print("[ERREUR] Aucun DEM sélectionné.")
+                return
+            
+            if not selected_article_code:
+                print("[ERREUR] Aucun article sélectionné.")
                 return
 
             # Import de la base
             from models.database import db
 
-            # Rechercher directement le produit par son DEM dans la base (check both uppercase and lowercase)
-            article = db.articles.find_one({"$or": [
-                {"produits.DEM": selected_dem},
-                {"produits.dem": selected_dem}
-            ]})
+            # Rechercher l'article actuellement sélectionné
+            article = db.articles.find_one({"code": selected_article_code})
 
             if article and "produits" in article:
-                # Find the specific product with the matching DEM
+                # Find the specific product with the matching DEM in the selected article
                 produit = None
                 for p in article.get("produits", []):
                     if p.get("DEM") == selected_dem or p.get("dem") == selected_dem:
@@ -1375,19 +1371,20 @@ class FabricationView(tk.Frame):
                 
                 if produit:
                     # Mise à jour des champs Prix et Quantité (check both uppercase and lowercase field names)
-                    prix = produit.get("Prix") or produit.get("prix") or produit.get("price") or 0
-                    quantite = produit.get("Quantité") or produit.get("quantité") or produit.get("quantite") or produit.get("quantity") or 0
+                    # Priority: use lowercase field names as they are the standard
+                    prix = produit.get("price") or produit.get("prix") or produit.get("Prix") or 0
+                    quantite = produit.get("quantity") or produit.get("quantite") or produit.get("Quantité") or produit.get("quantité") or 0
                     
                     self.detail_entries["Prix"].delete(0, tk.END)
                     self.detail_entries["Prix"].insert(0, str(prix))
                     self.detail_entries["Quantité en stock"].delete(0, tk.END)
                     self.detail_entries["Quantité en stock"].insert(0, str(quantite))
 
-                    print(f"[INFO] Champs mis à jour avec succès. Prix={prix}, Quantité={quantite}")
+                    print(f"[INFO] Champs mis à jour avec succès pour {selected_article_code} - DEM {selected_dem}: Prix={prix}, Quantité={quantite}")
                 else:
-                    print(f"[ERREUR] Produit avec DEM '{selected_dem}' non trouvé dans l'article.")
+                    print(f"[ERREUR] Produit avec DEM '{selected_dem}' non trouvé dans l'article {selected_article_code}.")
             else:
-                print(f"[ERREUR] Aucun article trouvé contenant le DEM '{selected_dem}'.")
+                print(f"[ERREUR] Article '{selected_article_code}' non trouvé ou sans produits.")
 
         except Exception as e:
             import traceback
@@ -1590,38 +1587,6 @@ class FabricationView(tk.Frame):
         print(f"Résultat de l'enregistrement des détails: matched_count={result.matched_count}, modified_count={result.modified_count}")
     
     def valider(self):
-        # Diminution dans le détail-article (array produits)
-        from models.database import db
-        for item in self.detail_tree.get_children():
-            values = self.detail_tree.item(item, 'values')
-            try:
-                # Récupérer le code article et le DEM
-                code_article = values[self.fields.index("Article")]
-                dem = values[self.fields.index("DEM")]
-                quantite_fabriquee = float(values[self.fields.index("Quantité fabriquée")])
-                # Récupérer l'article
-                article = db.articles.find_one({"code": code_article})
-                if article and "produits" in article:
-                    produits = article["produits"]
-                    for produit in produits:
-                        if str(produit.get("DEM")) == str(dem):
-                            old_qte = float(produit.get("Quantité", 0))
-                            new_qte = old_qte - quantite_fabriquee
-                            produit["Quantité"] = str(new_qte)
-                            print(f"[DEBUG] Diminution produit DEM={dem}: {old_qte} -> {new_qte}")
-                            break
-                    db.articles.update_one({"code": code_article}, {"$set": {"produits": produits}})
-
-                    # Diminution du stock dans la table fabrication en prenant en compte le lot sélectionné
-                    # Correction : utiliser le lot de la ligne du détail, pas celui du formulaire principal
-                    idx_lot = self.fields.index("Lot") if "Lot" in self.fields else None
-                    lot_detail = values[idx_lot] if idx_lot is not None else ""
-                    db.fabrications.update_one(
-                        {"code": self.current_code, "optim": self.current_optim, "lot": lot_detail, "detail-fabrication.article": code_article},
-                        {"$inc": {"detail-fabrication.$.quantite_stock": -quantite_fabriquee}}
-                    )
-            except Exception as e:
-                print(f"[ERROR] Diminution stock produit: {e}")
         """Méthode pour valider une fabrication et mettre à jour les stocks"""
         # Vérification des quantités fabriquées vs stock
         erreur_stock = False
@@ -1763,75 +1728,246 @@ class FabricationView(tk.Frame):
             msgbox.showerror("Erreur Base de Données", f"Erreur lors de la création de la fabrication : {str(e)}")
             return
 
-        # MISE À JOUR DES STOCKS (UNE SEULE FOIS)
+        # MISE À JOUR DES STOCKS APRÈS LA CRÉATION DE LA FABRICATION
+        erreurs_stock = []  # Pour collecter les erreurs
         try:
             from models.database import db
-            print("[DEBUG] Début de la mise à jour des stocks")
+            print("\n[DEBUG] ========== DEBUT MISE A JOUR DES STOCKS ==========")
             
             for detail in detail_fabrication:
                 try:
                     code_article = detail.get("article", "")
                     quantite_fabriquee = float(detail.get("quantite_fabrique", 0))
                     dem_utilise = detail.get("dem", None)
-                    lot_utilise = detail.get("lot", None)
-                    recette_utilisee = detail.get("recette", "")
-                    optim_utilise = detail.get("optim", "")
-                    print(f"[DEBUG] Traitement article: {code_article}, Quantité à diminuer: {quantite_fabriquee}, DEM: {dem_utilise}, Lot: {lot_utilise}")
                     
-                    if dem_utilise is not None and str(dem_utilise) != "" and float(dem_utilise) != 0.0:
-                        # Recherche dans articles par code et DEM
-                        article = db.articles.find_one({"code": code_article})
-                        if article:
-                            produits = article.get("produits", [])
-                            produit_trouve = None
-                            for produit in produits:
-                                if str(produit.get("DEM")) == str(dem_utilise):
-                                    produit_trouve = produit
-                                    break
-                            if produit_trouve:
-                                old_qte = float(produit_trouve.get("Quantité", 0))
-                                new_qte = old_qte - quantite_fabriquee
-                                produit_trouve["Quantité"] = str(new_qte)
-                                print(f"[DEBUG] Diminution produit DEM={dem_utilise}: {old_qte} -> {new_qte}")
-                                db.articles.update_one({"code": code_article}, {"$set": {"produits": produits}})
-                            else:
-                                print(f"[WARNING] Aucun produit trouvé avec DEM={dem_utilise} pour l'article {code_article}")
+                    print(f"\n[DEBUG] --- Article: {code_article} ---")
+                    print(f"[DEBUG] DEM demande: '{dem_utilise}' (type: {type(dem_utilise).__name__})")
+                    print(f"[DEBUG] Quantite a diminuer: {quantite_fabriquee}")
+                    
+                    # Vérifier si le DEM est valide (non vide, non zéro)
+                    if dem_utilise is None or str(dem_utilise).strip() == "":
+                        print(f"[DEBUG] [X] DEM vide, ignore pour {code_article}")
+                        continue
+                    
+                    try:
+                        dem_float = float(dem_utilise)
+                        if dem_float == 0.0:
+                            print(f"[DEBUG] [X] DEM est zero, ignore pour {code_article}")
+                            continue
+                    except (ValueError, TypeError):
+                        print(f"[DEBUG] [X] DEM non numerique: '{dem_utilise}', ignore pour {code_article}")
+                        continue
+                    
+                    # Récupérer l'article depuis MongoDB
+                    article = db.articles.find_one({"code": code_article})
+                    if not article:
+                        msg = f"Article {code_article} non trouve dans MongoDB"
+                        print(f"[WARNING] [X] {msg}")
+                        erreurs_stock.append(msg)
+                        continue
+                    
+                    if "produits" not in article or not article["produits"]:
+                        msg = f"Article {code_article} n'a pas de produits"
+                        print(f"[WARNING] [X] {msg}")
+                        erreurs_stock.append(msg)
+                        continue
+                    
+                    produits = article["produits"]
+                    print(f"[DEBUG] Article trouve avec {len(produits)} produit(s)")
+                    
+                    # Chercher le produit avec le bon DEM
+                    produit_trouve = False
+                    produit_index = -1
+                    
+                    # Afficher tous les DEMs disponibles
+                    dems_disponibles = []
+                    for idx, produit in enumerate(produits):
+                        dem_produit = produit.get("dem", produit.get("DEM", ""))
+                        qte_produit = produit.get("quantity", "N/A")
+                        dems_disponibles.append(f"DEM={dem_produit}, qty={qte_produit}")
+                        print(f"[DEBUG]   Produit[{idx}]: dem='{dem_produit}' (type: {type(dem_produit).__name__}), quantity='{qte_produit}'")
+                        
+                        # Comparer les DEM avec plusieurs méthodes
+                        match = False
+                        
+                        # Méthode 1: Comparaison numérique (float)
+                        try:
+                            if float(dem_produit) == float(dem_utilise):
+                                match = True
+                                print(f"[DEBUG]     [OK] Match numerique: {float(dem_produit)} == {float(dem_utilise)}")
+                        except (ValueError, TypeError) as e:
+                            print(f"[DEBUG]     [X] Comparaison numerique impossible: {e}")
+                        
+                        # Méthode 2: Comparaison string (si pas de match numérique)
+                        if not match and str(dem_produit).strip() == str(dem_utilise).strip():
+                            match = True
+                            print(f"[DEBUG]     [OK] Match string: '{dem_produit}' == '{dem_utilise}'")
+                        
+                        if match:
+                            produit_trouve = True
+                            produit_index = idx
+                            print(f"[DEBUG]   >>> PRODUIT TROUVE a l'index {idx} <<<")
+                            break
+                    
+                    if produit_trouve:
+                        # Vérifier que quantity existe
+                        if "quantity" not in produits[produit_index]:
+                            msg = f"Le produit DEM={dem_utilise} de {code_article} n'a pas de champ 'quantity'"
+                            print(f"[WARNING] [X] {msg}")
+                            erreurs_stock.append(msg)
+                            continue
+                        
+                        # Diminuer la quantité
+                        try:
+                            old_qte = float(produits[produit_index]["quantity"])
+                        except (ValueError, TypeError) as e:
+                            msg = f"Quantite invalide pour {code_article} DEM={dem_utilise}: {produits[produit_index].get('quantity')}"
+                            print(f"[ERROR] [X] {msg}")
+                            erreurs_stock.append(msg)
+                            continue
+                        
+                        new_qte = old_qte - quantite_fabriquee
+                        produits[produit_index]["quantity"] = str(new_qte)
+                        
+                        print(f"[DEBUG] [OK][OK][OK] Diminution effectuee: {old_qte} - {quantite_fabriquee} = {new_qte}")
+                        
+                        # Recalculer la quantité générale (somme de tous les produits)
+                        quantite_generale = 0.0
+                        for prod in produits:
+                            try:
+                                qte = float(prod.get("quantity", 0))
+                                quantite_generale += qte
+                            except (ValueError, TypeError):
+                                print(f"[WARNING] Quantite invalide ignoree: {prod.get('quantity')}")
+                        
+                        print(f"[DEBUG] [OK] Quantite generale recalculee: {quantite_generale}")
+                        
+                        # Mettre à jour MongoDB
+                        update_result = db.articles.update_one(
+                            {"code": code_article}, 
+                            {"$set": {
+                                "produits": produits,
+                                "quantity": quantite_generale
+                            }}
+                        )
+                        
+                        if update_result.modified_count > 0:
+                            print(f"[DEBUG] [OK][OK][OK] MongoDB mis a jour pour {code_article}")
                         else:
-                            print(f"[WARNING] Article non trouvé: {code_article}")
-                    elif lot_utilise is not None and str(lot_utilise) != "" and float(lot_utilise) != 0.0:
-                        # Recherche dans fabrications par lot
-                        fabrication = db.fabrications.find_one({"code": code_article,"optim": optim_utilise, "recette_code": recette_utilisee, "lot": lot_utilise})
-                        if fabrication:
-                            quantite_stock_actuelle = float(fabrication.get("quantite_a_fabriquer", 0))
-                            nouvelle_quantite_stock = quantite_stock_actuelle - quantite_fabriquee
-                            print(f"[DEBUG] Lot utilisé 2: {lot_utilise}")
-                            db.fabrications.update_one(
-                                {
-                                    "code": code_article,
-                                    "optim": optim_utilise,
-                                    "recette_code": recette_utilisee,
-                                    "lot": lot_utilise
-                                },
-                                {"$set": {"quantite_a_fabriquer": nouvelle_quantite_stock}}
-                            )
-                            print(f"[DEBUG] Fabrication mise à jour: {quantite_stock_actuelle} -> {nouvelle_quantite_stock}")
-                        else:
-                            print(f"[WARNING] Fabrication non trouvée: {code_article} lot={lot_utilise}")
+                            print(f"[WARNING] MongoDB update matched={update_result.matched_count}, modified={update_result.modified_count}")
                     else:
-                        print(f"[WARNING] Ni DEM ni Lot valide pour l'article {code_article}")
+                        msg = f"Produit avec DEM={dem_utilise} non trouve dans {code_article}. DEMs disponibles: {', '.join(dems_disponibles)}"
+                        print(f"[WARNING] [X] {msg}")
+                        erreurs_stock.append(msg)
+                        
                 except Exception as e:
-                    print(f"[ERROR] Erreur lors de la mise à jour de l'article {detail.get('article', 'UNKNOWN')}: {e}")
+                    msg = f"Erreur pour {code_article}: {str(e)}"
+                    print(f"[ERROR] [X] {msg}")
+                    erreurs_stock.append(msg)
+                    import traceback
+                    traceback.print_exc()
             
-            print("[DEBUG] Quantités en stock mises à jour après validation.")
+            # TRAITER AUSSI LES FABRICATIONS MIXTES (composants identifiés par LOT)
+            print("\n[DEBUG] === TRAITEMENT DES FABRICATIONS MIXTES (LOT) ===")
+            for detail in detail_fabrication:
+                try:
+                    code_article = detail.get("article", "")
+                    quantite_fabriquee = float(detail.get("quantite_fabrique", 0))
+                    lot_utilise = detail.get("lot", None)
+                    optim_utilise = detail.get("optim", "")
+                    recette_utilisee = detail.get("recette", "")
+                    dem_utilise = detail.get("dem", None)
+                    
+                    # Vérifier si c'est une fabrication (a un lot mais pas de DEM valide)
+                    has_valid_dem = False
+                    if dem_utilise is not None and str(dem_utilise).strip() != "":
+                        try:
+                            if float(dem_utilise) != 0.0:
+                                has_valid_dem = True
+                        except:
+                            pass
+                    
+                    # Si pas de DEM valide mais a un LOT, c'est une fabrication mixte
+                    if not has_valid_dem and lot_utilise is not None and str(lot_utilise).strip() != "":
+                        print(f"\n[DEBUG] --- Fabrication Mixte: {code_article} ---")
+                        print(f"[DEBUG] Lot: {lot_utilise}")
+                        print(f"[DEBUG] Optim: {optim_utilise}")
+                        print(f"[DEBUG] Recette: {recette_utilisee}")
+                        print(f"[DEBUG] Quantite fabriquee: {quantite_fabriquee}")
+                        
+                        # Chercher la fabrication source
+                        fabrication_query = {
+                            "code": code_article,
+                            "lot": lot_utilise
+                        }
+                        
+                        # Ajouter optim et recette si non vides
+                        if optim_utilise and str(optim_utilise).strip() != "":
+                            fabrication_query["optim"] = optim_utilise
+                        if recette_utilisee and str(recette_utilisee).strip() != "":
+                            fabrication_query["recette_code"] = recette_utilisee
+                        
+                        print(f"[DEBUG] Recherche fabrication: {fabrication_query}")
+                        fabrication = db.fabrications.find_one(fabrication_query)
+                        
+                        if fabrication:
+                            quantite_actuelle = float(fabrication.get("quantite_a_fabriquer", 0))
+                            nouvelle_quantite = quantite_actuelle - quantite_fabriquee
+                            
+                            print(f"[DEBUG] [OK] Fabrication trouvee")
+                            print(f"[DEBUG] Quantite actuelle: {quantite_actuelle}")
+                            print(f"[DEBUG] Nouvelle quantite: {nouvelle_quantite}")
+                            
+                            # Mettre à jour la quantite_a_fabriquer
+                            update_result = db.fabrications.update_one(
+                                fabrication_query,
+                                {"$set": {"quantite_a_fabriquer": nouvelle_quantite}}
+                            )
+                            
+                            if update_result.modified_count > 0:
+                                print(f"[DEBUG] [OK][OK][OK] Fabrication {code_article} (lot {lot_utilise}) mise a jour: {quantite_actuelle} -> {nouvelle_quantite}")
+                            else:
+                                print(f"[WARNING] Fabrication update matched={update_result.matched_count}, modified={update_result.modified_count}")
+                        else:
+                            msg = f"Fabrication {code_article} (lot {lot_utilise}) non trouvee"
+                            print(f"[WARNING] [X] {msg}")
+                            erreurs_stock.append(msg)
+                            
+                except Exception as e:
+                    msg = f"Erreur lors du traitement de la fabrication mixte {code_article}: {str(e)}"
+                    print(f"[ERROR] [X] {msg}")
+                    erreurs_stock.append(msg)
+                    import traceback
+                    traceback.print_exc()
+            
+            print("\n[DEBUG] ========== FIN MISE A JOUR DES STOCKS ==========")
+            
+            # Afficher un avertissement si des erreurs sont survenues
+            if erreurs_stock:
+                import tkinter.messagebox as msgbox
+                msgbox.showwarning(
+                    "Avertissement Stock", 
+                    f"La fabrication a été créée, mais il y a eu des problèmes lors de la mise à jour des stocks:\n\n" + 
+                    "\n".join(f"- {err}" for err in erreurs_stock[:5])  # Limiter à 5 erreurs
+                )
             
         except Exception as e:
-            print(f"[ERROR] Erreur lors de la mise à jour des stocks : {e}")
+            print(f"[ERROR] Erreur générale lors de la mise à jour des stocks: {e}")
+            import traceback
+            traceback.print_exc()
             import tkinter.messagebox as msgbox
-            msgbox.showwarning("Avertissement", f"La fabrication a été créée mais il y a eu des erreurs lors de la mise à jour des stocks : {str(e)}")
+            msgbox.showwarning(
+                "Avertissement", 
+                f"La fabrication a été créée mais la mise à jour des stocks a échoué:\n{str(e)}"
+            )
 
         # Mise à jour de l'interface utilisateur
         try:
-            prix_formule_result = result.get("prix_formule", 0) if result else 0
+            from models.database import db
+            # Récupérer la fabrication créée depuis MongoDB pour avoir le prix_formule
+            fabrication_creee = db.fabrications.find_one({"code": code, "optim": optim})
+            prix_formule_result = fabrication_creee.get("prix_formule", 0) if fabrication_creee else prix_formule
+            
             selected_item = self.tree.selection()
             if selected_item:
                 self.tree.set(selected_item, "Prix de Formule", prix_formule_result)
